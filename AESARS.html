@@ -1,0 +1,2065 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>AESARS — ARM Embedded Systems Assisted Register Setup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=JetBrains+Mono:wght@300;400;500;600&family=Orbitron:wght@400;600;700;800&family=Sora:wght@300;400;500&display=swap" rel="stylesheet"/>
+<style>
+/* ══════════════════════════════════════════
+   CSS VARS — DARK (default) / LIGHT (NOUR)
+   ══════════════════════════════════════════ */
+:root{
+  --bg:        #000408;
+  --bg2:       #00060e;
+  --surface:   #020c18;
+  --surface2:  #041020;
+  --surface3:  #061428;
+  --border:    #081c30;
+  --border2:   #0a2238;
+  --border3:   #0e2e48;
+  --accent:    #00e8c8;
+  --accentB:   #00b8a0;
+  --accent-d:  rgba(0,232,200,.10);
+  --accent-d2: rgba(0,232,200,.18);
+  --glow:      0 0 28px rgba(0,232,200,.4);
+  --glow-sm:   0 0 12px rgba(0,232,200,.25);
+  --accent2:   #00cfff;
+  --warn:      #ff7b2e;
+  --text:      #b8d4ee;
+  --text2:     #4a7898;
+  --text3:     #1e3a52;
+  --heading:   #daeeff;
+  --mono-bg:   #00060e;
+  --mono-bdr:  #081c30;
+  --tag-bg:    #021020;
+  --tag-col:   #00cfff;
+  --shadow:    0 8px 56px rgba(0,0,0,.85);
+  --r:         10px;
+  --rl:        16px;
+  --tr:        .22s cubic-bezier(.4,0,.2,1);
+}
+[data-theme="light"]{
+  --bg:        #e8eef6;
+  --bg2:       #dce4ee;
+  --surface:   #ffffff;
+  --surface2:  #f0f5fb;
+  --surface3:  #e4ecf5;
+  --border:    #c8d8ea;
+  --border2:   #b8cce0;
+  --border3:   #a5bdd5;
+  --accent:    #007a62;
+  --accentB:   #006050;
+  --accent-d:  rgba(0,122,98,.1);
+  --accent-d2: rgba(0,122,98,.18);
+  --glow:      0 0 20px rgba(0,122,98,.2);
+  --glow-sm:   0 0 10px rgba(0,122,98,.15);
+  --accent2:   #005fa8;
+  --text:      #1a3348;
+  --text2:     #3d607a;
+  --text3:     #8faec5;
+  --heading:   #0a1f30;
+  --mono-bg:   #eaf0f7;
+  --mono-bdr:  #c0d4e6;
+  --tag-bg:    #d8eaff;
+  --tag-col:   #004fa8;
+  --shadow:    0 4px 24px rgba(0,0,0,.1);
+}
+
+/* ══════════════════════════════════════════
+   RESET
+   ══════════════════════════════════════════ */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden;transition:background var(--tr),color var(--tr)}
+::selection{background:var(--accent);color:#000}
+a{color:inherit;text-decoration:none}
+
+/* ══════════════════════════════════════════
+   CANVAS BACKGROUND (animated teal rain)
+   ══════════════════════════════════════════ */
+#bgCanvas{position:fixed;inset:0;z-index:0;opacity:.07;pointer-events:none;transition:opacity .4s}
+[data-theme="light"] #bgCanvas{opacity:.04}
+
+/* GRID OVERLAY */
+body::before{
+  content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
+  background-image:
+    linear-gradient(var(--border) 1px,transparent 1px),
+    linear-gradient(90deg,var(--border) 1px,transparent 1px);
+  background-size:44px 44px;
+  opacity:.5;transition:opacity var(--tr);
+}
+[data-theme="light"] body::before{opacity:.2}
+
+/* SCANLINE */
+body::after{
+  content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
+  background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,.08) 2px,rgba(0,0,0,.08) 4px);
+  animation:scanMove 8s linear infinite;
+}
+@keyframes scanMove{from{background-position:0 0}to{background-position:0 100px}}
+[data-theme="light"] body::after{opacity:0}
+
+/* SCROLLBAR */
+::-webkit-scrollbar{width:5px}
+::-webkit-scrollbar-track{background:var(--bg)}
+::-webkit-scrollbar-thumb{background:var(--border3);border-radius:3px}
+
+/* ══════════════════════════════════════════
+   LAYOUT
+   ══════════════════════════════════════════ */
+.wrap{position:relative;z-index:1;max-width:1300px;margin:0 auto;padding:0 28px}
+
+/* ══════════════════════════════════════════
+   HEADER
+   ══════════════════════════════════════════ */
+header{
+  position:sticky;top:0;z-index:100;
+  background:rgba(2,8,16,.88);
+  backdrop-filter:blur(20px);
+  border-bottom:1px solid var(--border2);
+  transition:background var(--tr),border-color var(--tr);
+}
+[data-theme="light"] header{background:rgba(232,238,246,.92)}
+.hdr{display:flex;align-items:center;justify-content:space-between;height:66px;gap:16px}
+
+/* ── LOGO ── */
+.logo{display:flex;align-items:center;gap:14px;flex-shrink:0}
+.logo-img{
+  height:46px;width:auto;flex-shrink:0;
+  object-fit:contain;
+  filter:drop-shadow(0 0 10px rgba(0,232,200,.45));
+  transition:filter var(--tr);
+}
+.logo:hover .logo-img{filter:drop-shadow(0 0 18px rgba(0,232,200,.75))}
+[data-theme="light"] .logo-img{filter:drop-shadow(0 0 6px rgba(0,122,98,.3))}
+.modal-logo-img{
+  width:100%;max-width:320px;
+  height:auto;display:block;margin:0 auto 20px;
+  object-fit:contain;
+  filter:drop-shadow(0 0 12px rgba(0,232,200,.35));
+  border-radius:8px;
+}
+.logo-words{}
+.logo-name{
+  display:block;
+  font-family:'Orbitron',sans-serif;font-weight:800;
+  font-size:1.35rem;letter-spacing:.14em;
+  color:var(--accent);line-height:1;
+}
+.logo-tagline{
+  display:block;
+  font-family:'JetBrains Mono',monospace;font-size:.48rem;
+  color:var(--text2);letter-spacing:.1em;text-transform:uppercase;
+  margin-top:3px;
+}
+
+/* ── NAV ── */
+nav{display:flex;align-items:center;gap:4px;flex:1;justify-content:center}
+.nav-link{
+  font-family:'Rajdhani',sans-serif;font-weight:600;font-size:.9rem;
+  letter-spacing:.07em;text-transform:uppercase;
+  color:var(--text2);padding:6px 16px;border-radius:6px;
+  border:1px solid transparent;transition:all var(--tr);
+}
+.nav-link:hover{color:var(--accent);border-color:var(--border3);background:var(--accent-d)}
+
+/* ── NOUR BUTTON ── */
+.nour-btn{
+  display:flex;align-items:center;gap:9px;
+  padding:8px 20px;border-radius:8px;
+  background:var(--surface2);border:1px solid var(--border3);
+  color:var(--text);cursor:pointer;
+  font-family:'Orbitron',sans-serif;font-weight:700;font-size:.75rem;
+  letter-spacing:.15em;transition:all var(--tr);white-space:nowrap;
+}
+.nour-btn:hover{border-color:var(--accent);box-shadow:var(--glow)}
+.nour-icon{font-size:1rem;transition:transform .45s cubic-bezier(.34,1.56,.64,1)}
+.nour-btn:hover .nour-icon{transform:rotate(25deg) scale(1.2)}
+
+/* ══════════════════════════════════════════
+   HERO
+   ══════════════════════════════════════════ */
+.hero{
+  padding:80px 0 52px;text-align:center;position:relative;
+}
+.hero-eyebrow{
+  display:inline-flex;align-items:center;gap:9px;
+  background:var(--tag-bg);color:var(--tag-col);
+  font-family:'JetBrains Mono',monospace;font-size:.7rem;letter-spacing:.08em;
+  padding:5px 16px;border-radius:100px;
+  border:1px solid rgba(0,207,255,.18);
+  margin-bottom:28px;
+  animation:riseIn .6s ease both;
+}
+.hero-eyebrow::before{content:'[ ';opacity:.5}
+.hero-eyebrow::after{content:' ]';opacity:.5}
+.hero h1{
+  font-family:'Orbitron',sans-serif;font-weight:800;
+  font-size:clamp(2rem,4.5vw,3.6rem);
+  color:var(--heading);line-height:1.1;
+  margin-bottom:18px;
+  animation:riseIn .6s .1s ease both;
+  letter-spacing:.04em;
+}
+.hero h1 em{
+  font-style:normal;color:var(--accent);
+  text-shadow:0 0 30px rgba(0,232,200,.4);
+}
+.hero p{
+  font-size:.95rem;color:var(--text2);
+  max-width:580px;margin:0 auto 36px;line-height:1.75;
+  animation:riseIn .6s .2s ease both;
+}
+.chips{display:flex;flex-wrap:wrap;justify-content:center;gap:9px;animation:riseIn .6s .3s ease both}
+.chip{
+  font-family:'JetBrains Mono',monospace;font-size:.68rem;
+  padding:4px 13px;border-radius:5px;
+  background:var(--surface);border:1px solid var(--border3);
+  color:var(--text2);letter-spacing:.04em;
+  transition:border-color .2s,color .2s;
+}
+.chip:hover{border-color:var(--accent);color:var(--accent)}
+
+/* ══════════════════════════════════════════
+   SECTION HEADER
+   ══════════════════════════════════════════ */
+.sec{padding:44px 0}
+.sec-eye{
+  font-family:'JetBrains Mono',monospace;font-size:.68rem;
+  letter-spacing:.2em;text-transform:uppercase;color:var(--accent);
+  margin-bottom:8px;display:flex;align-items:center;gap:8px;
+}
+.sec-eye::before{content:'// '}
+.sec-title{
+  font-family:'Orbitron',sans-serif;font-weight:700;
+  font-size:1.5rem;color:var(--heading);margin-bottom:26px;letter-spacing:.06em;
+}
+
+/* ══════════════════════════════════════════
+   GENERATOR CARD
+   ══════════════════════════════════════════ */
+.gen-card{
+  background:var(--surface);border:1px solid var(--border2);
+  border-radius:var(--rl);overflow:hidden;box-shadow:var(--shadow);
+  position:relative;
+}
+/* top glow line */
+.gen-card::before{
+  content:'';position:absolute;top:0;left:10%;right:10%;height:1px;
+  background:linear-gradient(90deg,transparent,var(--accent),transparent);
+  opacity:.6;
+}
+.gen-two{display:grid;grid-template-columns:1fr 1fr;min-height:280px}
+@media(max-width:740px){.gen-two{grid-template-columns:1fr}}
+.pane-hdr{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:11px 20px;border-bottom:1px solid var(--border);
+  background:var(--surface2);
+}
+.pane-hdr-l{
+  font-family:'JetBrains Mono',monospace;font-size:.68rem;
+  letter-spacing:.08em;text-transform:uppercase;color:var(--text2);
+  display:flex;align-items:center;gap:9px;
+}
+.wdots{display:flex;gap:5px}
+.wd{width:8px;height:8px;border-radius:50%}
+.wr{background:#ff5f56}.wy{background:#ffbd2e}.wg{background:#27c93f}
+.pane-hint{font-family:'JetBrains Mono',monospace;font-size:.6rem;color:var(--text3);letter-spacing:.05em}
+textarea{
+  width:100%;height:230px;resize:none;background:transparent;
+  border:none;outline:none;font-family:'Sora',sans-serif;font-size:.88rem;
+  color:var(--text);line-height:1.75;padding:18px 20px;
+  transition:color var(--tr);
+}
+textarea::placeholder{color:var(--text3);font-size:.82rem}
+.vdiv{border:none;border-left:1px solid var(--border);margin:0}
+.out-body{
+  padding:18px 20px;font-family:'JetBrains Mono',monospace;font-size:.78rem;
+  line-height:1.85;color:var(--text2);height:230px;overflow-y:auto;white-space:pre-wrap;
+}
+.ph{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:10px;color:var(--text3);text-align:center}
+.ph-icon{font-size:2rem;opacity:.35}
+
+/* status bar */
+.sbar{
+  display:flex;align-items:center;gap:9px;
+  padding:8px 20px;background:var(--surface2);border-top:1px solid var(--border);
+  font-family:'JetBrains Mono',monospace;font-size:.68rem;color:var(--text3);letter-spacing:.05em;
+}
+.sdot{width:7px;height:7px;border-radius:50%;background:var(--text3);flex-shrink:0}
+.sdot.ok{background:#27c93f;box-shadow:0 0 6px rgba(39,201,63,.55)}
+.sdot.busy{background:#ffbd2e;animation:pls 1s infinite}
+.sdot.err{background:#ff5f56}
+@keyframes pls{0%,100%{box-shadow:0 0 0 0 rgba(255,189,46,.5)}50%{box-shadow:0 0 0 7px rgba(255,189,46,0)}}
+.stxt{flex:1}
+
+/* bottom bar */
+.gen-bot{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:14px 20px;border-top:1px solid var(--border);
+  background:var(--surface2);gap:12px;flex-wrap:wrap;
+}
+.eg-wrap{display:flex;gap:7px;flex-wrap:wrap;align-items:center}
+.eg-lbl{font-size:.72rem;color:var(--text3);font-family:'JetBrains Mono',monospace}
+.eg{
+  font-family:'JetBrains Mono',monospace;font-size:.67rem;
+  padding:4px 11px;border-radius:5px;
+  background:var(--accent-d);color:var(--accent);
+  border:1px solid rgba(0,232,200,.2);cursor:pointer;transition:all .18s;letter-spacing:.03em;
+}
+.eg:hover{background:var(--accent-d2)}
+.acts{display:flex;gap:10px;align-items:center}
+.btn-gen{
+  display:flex;align-items:center;gap:8px;
+  padding:10px 26px;background:var(--accent);color:#021510;
+  font-family:'Orbitron',sans-serif;font-weight:700;font-size:.75rem;
+  letter-spacing:.1em;text-transform:uppercase;
+  border:none;border-radius:8px;cursor:pointer;transition:all .2s;
+}
+.btn-gen:hover{box-shadow:var(--glow);transform:translateY(-1px)}
+.btn-gen:active{transform:translateY(0)}
+.btn-gen:disabled{opacity:.45;cursor:not-allowed;transform:none;box-shadow:none}
+.btn-clr{
+  padding:10px 16px;background:transparent;color:var(--text2);
+  font-family:'Rajdhani',sans-serif;font-weight:600;font-size:.88rem;
+  border:1px solid var(--border3);border-radius:8px;cursor:pointer;transition:all .2s;
+}
+.btn-clr:hover{border-color:var(--warn);color:var(--warn)}
+.spin{width:17px;height:17px;border-radius:50%;border:2px solid rgba(2,21,16,.25);border-top-color:#021510;animation:rot .7s linear infinite;display:none}
+.btn-gen.ld .spin{display:block}.btn-gen.ld .lbl{display:none}
+@keyframes rot{to{transform:rotate(360deg)}}
+
+/* result panels */
+.rp-wrap{display:none;border-top:1px solid var(--border)}
+.rp-wrap.on{display:block}
+.rtabs{display:flex;background:var(--surface2);border-bottom:1px solid var(--border);padding:0 16px;gap:2px}
+.rtab{
+  font-family:'JetBrains Mono',monospace;font-size:.7rem;
+  padding:10px 16px;cursor:pointer;color:var(--text2);
+  border:none;border-bottom:2px solid transparent;background:transparent;transition:all .18s;letter-spacing:.06em;
+}
+.rtab.on{color:var(--accent);border-bottom-color:var(--accent)}
+.rtab:hover{color:var(--text)}
+.rpanel{display:none;padding:24px}
+.rpanel.on{display:block}
+
+/* register table */
+.rtbl{width:100%;border-collapse:collapse;font-size:.82rem}
+.rtbl th{font-family:'JetBrains Mono',monospace;font-size:.64rem;letter-spacing:.12em;text-transform:uppercase;color:var(--text3);padding:8px 14px;text-align:left;border-bottom:1px solid var(--border)}
+.rtbl td{padding:10px 14px;border-bottom:1px solid var(--border);vertical-align:top}
+.rtbl tr:last-child td{border-bottom:none}
+.rtbl tr:hover td{background:var(--accent-d)}
+.rn{font-family:'JetBrains Mono',monospace;font-size:.77rem;color:var(--accent);white-space:nowrap}
+.ra{font-family:'JetBrains Mono',monospace;font-size:.74rem;color:var(--text2)}
+.rv{font-family:'JetBrains Mono',monospace;font-size:.74rem;color:#ff9e4a}
+.rd{font-size:.82rem;color:var(--text2);line-height:1.5}
+
+/* asm box */
+.asm{
+  background:var(--mono-bg);border:1px solid var(--mono-bdr);
+  border-radius:var(--r);padding:20px 22px;
+  font-family:'JetBrains Mono',monospace;font-size:.79rem;line-height:1.9;
+  color:var(--text);overflow-x:auto;position:relative;
+}
+.asm pre{margin:0;white-space:pre}
+.cpybtn{
+  position:absolute;top:12px;right:12px;
+  background:var(--surface2);border:1px solid var(--border3);
+  color:var(--text2);border-radius:6px;padding:5px 11px;
+  font-family:'JetBrains Mono',monospace;font-size:.63rem;cursor:pointer;transition:all .18s;letter-spacing:.07em;
+}
+.cpybtn:hover{border-color:var(--accent);color:var(--accent)}
+.ac{color:#3d7a55;font-style:italic}
+.ak{color:#5cb3ff}
+.al{color:#ff9e4a;font-weight:600}
+.ar{color:#c792ea}
+.an{color:#f78c6c}
+.ad{color:#82aaff}
+
+/* ══════════════════════════════════════════
+   REFERENCE GRID
+   ══════════════════════════════════════════ */
+.rgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(305px,1fr));gap:15px;margin-top:4px}
+.rcard{
+  background:var(--surface);border:1px solid var(--border2);
+  border-radius:var(--r);padding:20px;
+  transition:border-color .22s,box-shadow .22s;position:relative;overflow:hidden;
+}
+.rcard::after{
+  content:'';position:absolute;inset:0;border-radius:var(--r);
+  background:radial-gradient(circle at 0% 0%,var(--accent-d),transparent 60%);
+  opacity:0;transition:opacity .22s;
+}
+.rcard:hover{border-color:var(--accent);box-shadow:0 0 20px var(--accent-d)}
+.rcard:hover::after{opacity:1}
+.rcard-hdr{display:flex;align-items:center;gap:12px;margin-bottom:12px;position:relative;z-index:1}
+.rico{
+  width:36px;height:36px;border-radius:8px;
+  background:var(--accent-d);display:flex;align-items:center;justify-content:center;
+  font-size:1rem;flex-shrink:0;border:1px solid rgba(0,232,200,.15);
+}
+.rctitle{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:1rem;color:var(--heading)}
+.rcsub{font-size:.73rem;color:var(--text2);margin-bottom:10px;line-height:1.55;position:relative;z-index:1}
+.qrtbl{width:100%;font-size:.76rem;margin-top:6px;position:relative;z-index:1}
+.qrtbl td{padding:3px 0;vertical-align:top}
+.qrtbl td:first-child{font-family:'JetBrains Mono',monospace;color:var(--accent);padding-right:14px;white-space:nowrap}
+.qrtbl td:last-child{color:var(--text2)}
+.rtags{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;position:relative;z-index:1}
+.rttag{font-family:'JetBrains Mono',monospace;font-size:.63rem;padding:2px 8px;border-radius:4px;background:var(--tag-bg);color:var(--tag-col);border:1px solid rgba(0,207,255,.15)}
+
+/* ══════════════════════════════════════════
+   CONVERTER
+   ══════════════════════════════════════════ */
+.ccard{background:var(--surface);border:1px solid var(--border2);border-radius:var(--rl);overflow:hidden;box-shadow:var(--shadow)}
+.ccard-hdr{padding:18px 24px;border-bottom:1px solid var(--border);background:var(--surface2);display:flex;align-items:center;gap:13px}
+.ccard-hdr-icon{font-size:1.4rem}
+.ccard-hdr-title{font-family:'Orbitron',sans-serif;font-weight:700;font-size:1rem;color:var(--heading);letter-spacing:.06em}
+.ccard-hdr-sub{font-size:.73rem;color:var(--text2)}
+.cbody{padding:28px 24px;display:grid;grid-template-columns:repeat(auto-fill,minmax(215px,1fr));gap:20px}
+.cfield{display:flex;flex-direction:column;gap:8px}
+.clabel{font-family:'JetBrains Mono',monospace;font-size:.66rem;letter-spacing:.12em;text-transform:uppercase;color:var(--text2)}
+.cinput{
+  background:var(--mono-bg);border:1px solid var(--mono-bdr);border-radius:8px;
+  padding:10px 14px;font-family:'JetBrains Mono',monospace;font-size:.84rem;
+  color:var(--text);outline:none;width:100%;transition:border-color .18s,box-shadow .18s;
+}
+.cinput:focus{border-color:var(--accent);box-shadow:var(--glow-sm)}
+.cinput::placeholder{color:var(--text3)}
+.cacts{padding:0 24px 20px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.btn-cc{
+  padding:9px 16px;background:transparent;color:var(--text2);
+  font-family:'Rajdhani',sans-serif;font-weight:600;font-size:.85rem;
+  border:1px solid var(--border3);border-radius:8px;cursor:pointer;transition:all .18s;
+}
+.btn-cc:hover{border-color:var(--warn);color:var(--warn)}
+.cnote{font-family:'JetBrains Mono',monospace;font-size:.7rem;color:var(--text3);margin-left:10px}
+.bitview{padding:0 24px 24px}
+.bitlbl{font-family:'JetBrains Mono',monospace;font-size:.65rem;color:var(--text3);letter-spacing:.1em;text-transform:uppercase;margin-bottom:10px}
+.brow{display:flex;flex-wrap:wrap;gap:3px}
+.bcell{
+  width:26px;height:26px;display:flex;align-items:center;justify-content:center;
+  border-radius:4px;background:var(--mono-bg);border:1px solid var(--mono-bdr);
+  font-family:'JetBrains Mono',monospace;font-size:.7rem;color:var(--text2);transition:all .1s;
+}
+.bcell.one{background:rgba(0,232,200,.15);border-color:rgba(0,232,200,.45);color:var(--accent)}
+.bcell.ix{font-size:.49rem;color:var(--text3);background:transparent;border:none;height:18px}
+.bsep{width:4px}
+
+/* ══════════════════════════════════════════
+   ABOUT BUTTON (fixed center-bottom)
+   ══════════════════════════════════════════ */
+.abt-anchor{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:60}
+.abt-btn{
+  display:flex;align-items:center;gap:8px;
+  background:var(--surface2);border:1px solid var(--border3);
+  color:var(--text2);padding:9px 24px;border-radius:100px;cursor:pointer;
+  font-family:'Rajdhani',sans-serif;font-weight:600;font-size:.85rem;
+  letter-spacing:.08em;text-transform:uppercase;
+  transition:all .22s;box-shadow:var(--shadow);backdrop-filter:blur(10px);
+}
+.abt-btn:hover{border-color:var(--accent);color:var(--accent);box-shadow:var(--glow)}
+
+/* ══════════════════════════════════════════
+   ABOUT MODAL
+   ══════════════════════════════════════════ */
+.moverlay{
+  position:fixed;inset:0;z-index:200;
+  background:rgba(0,0,0,.75);backdrop-filter:blur(8px);
+  display:flex;align-items:flex-end;justify-content:center;
+  padding:0 16px 80px;opacity:0;pointer-events:none;transition:opacity .25s;
+}
+.moverlay.on{opacity:1;pointer-events:all}
+.mbox{
+  background:var(--surface);border:1px solid var(--border3);
+  border-radius:var(--rl);padding:32px 36px;width:100%;max-width:540px;
+  box-shadow:0 -8px 60px rgba(0,0,0,.5);
+  transform:translateY(24px);transition:transform .32s cubic-bezier(.34,1.4,.64,1);
+  position:relative;
+}
+.moverlay.on .mbox{transform:translateY(0)}
+.mbox::before{
+  content:'';position:absolute;top:0;left:15%;right:15%;height:1px;
+  background:linear-gradient(90deg,transparent,var(--accent),transparent);opacity:.5;
+}
+.mclose{
+  position:absolute;top:16px;right:16px;
+  background:var(--surface2);border:1px solid var(--border);
+  color:var(--text2);width:30px;height:30px;border-radius:50%;
+  cursor:pointer;font-size:1rem;display:flex;align-items:center;justify-content:center;transition:all .18s;
+}
+.mclose:hover{border-color:var(--warn);color:var(--warn)}
+.mlogo{display:flex;align-items:center;gap:14px;margin-bottom:20px}
+.mlogo svg{width:38px;height:38px;filter:drop-shadow(0 0 8px rgba(0,232,200,.4))}
+.mn1{font-family:'Orbitron',sans-serif;font-weight:800;font-size:1.25rem;color:var(--accent);letter-spacing:.12em;display:block}
+.mn2{font-family:'JetBrains Mono',monospace;font-size:.58rem;color:var(--text2);letter-spacing:.06em;display:block;margin-top:3px}
+.mdesc{font-size:.88rem;color:var(--text2);line-height:1.75;margin-bottom:24px}
+.mdesc strong{color:var(--text);font-weight:600}
+.mlinks{display:flex;flex-direction:column;gap:10px}
+.mlink{
+  display:flex;align-items:center;gap:13px;
+  padding:12px 16px;border-radius:9px;
+  background:var(--surface2);border:1px solid var(--border);transition:all .18s;
+}
+.mlink:hover{border-color:var(--accent);background:var(--accent-d)}
+.micon{width:33px;height:33px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0;font-weight:700}
+.micon.li{background:#0077b5;color:#fff}
+.micon.gh{background:#161b22;color:#fff;border:1px solid #30363d}
+.micon.pf{background:var(--accent-d);color:var(--accent);border:1px solid rgba(0,232,200,.2)}
+.mlt{flex:1}
+.mlt1{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:.92rem;color:var(--heading)}
+.mlt2{font-family:'JetBrains Mono',monospace;font-size:.63rem;color:var(--text2)}
+.marr{color:var(--text3)}
+.mfooter{margin-top:20px;padding-top:16px;border-top:1px solid var(--border);font-family:'JetBrains Mono',monospace;font-size:.63rem;color:var(--text3);text-align:center;letter-spacing:.07em}
+
+/* ══════════════════════════════════════════
+   FOOTER
+   ══════════════════════════════════════════ */
+footer{border-top:1px solid var(--border);padding:28px 0 90px;text-align:center}
+.finner{font-family:'JetBrains Mono',monospace;font-size:.68rem;color:var(--text3);letter-spacing:.06em;display:flex;flex-direction:column;gap:7px}
+.finner a{color:var(--text2)}.finner a:hover{color:var(--accent)}
+
+/* ══════════════════════════════════════════
+   ANIMATIONS
+   ══════════════════════════════════════════ */
+@keyframes riseIn{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
+@keyframes glowPulse{0%,100%{filter:drop-shadow(0 0 6px rgba(0,232,200,.4))}50%{filter:drop-shadow(0 0 16px rgba(0,232,200,.8))}}
+
+/* HADITH BOX */
+.hadith-box{
+  background:var(--surface2);
+  border:1px solid var(--border3);
+  border-left:3px solid var(--accent);
+  border-radius:10px;
+  padding:18px 20px 14px;
+  margin-bottom:20px;
+  position:relative;
+  transition:background var(--tr),border-color var(--tr);
+}
+.hadith-mark{
+  position:absolute;top:-10px;left:16px;
+  font-family:Georgia,serif;font-size:2.4rem;
+  color:var(--accent);line-height:1;opacity:.5;
+}
+.hadith-ar{
+  font-family:'Scheherazade New','Traditional Arabic',serif;
+  font-size:1.2rem;line-height:1.9;
+  color:var(--heading);text-align:center;
+  margin-bottom:10px;letter-spacing:.04em;
+  direction:rtl;
+}
+.hadith-tr{
+  font-family:'Sora',sans-serif;font-style:italic;
+  font-size:.78rem;color:var(--text2);text-align:center;
+  line-height:1.6;letter-spacing:.01em;
+}
+/* Arabic font */
+@import url('https://fonts.googleapis.com/css2?family=Scheherazade+New:wght@400;700&display=swap');
+
+@media(max-width:600px){
+  nav{display:none}
+  .hero h1{font-size:1.8rem}
+  .gen-two{grid-template-columns:1fr}
+  .vdiv{display:none}
+  .cbody{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+
+<!-- ANIMATED BG CANVAS -->
+<canvas id="bgCanvas"></canvas>
+
+<!-- ══════════════════════════════════════════
+     HEADER
+     ══════════════════════════════════════════ -->
+<header>
+  <div class="wrap">
+    <div class="hdr">
+
+      <!-- LOGO — user-supplied image -->
+      <a class="logo" href="#">
+        <img class="logo-img" src="data:image/png;base64,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" alt="AESARS Logo"/>
+        <div class="logo-words">
+          <span class="logo-name">AESARS</span>
+          <span class="logo-tagline">Microprocessor Configuration · STM32F401</span>
+        </div>
+      </a>
+
+      <nav>
+        <a class="nav-link" href="#generator">Generator</a>
+        <a class="nav-link" href="#reference">Reference</a>
+        <a class="nav-link" href="#converter">Converter</a>
+      </nav>
+
+      <button class="nour-btn" onclick="toggleTheme()">
+        <span class="nour-icon" id="nourIcon">☀️</span>
+        <span id="nourLabel">NOUR</span>
+      </button>
+    </div>
+  </div>
+</header>
+
+<!-- ══════════════════════════════════════════
+     HERO
+     ══════════════════════════════════════════ -->
+<section class="hero" id="hero">
+  <div class="wrap">
+    <div class="hero-eyebrow">STM32F401RCT6 · ARM Cortex-M4 · RM0368 Rev 5</div>
+    <h1>Configure Registers.<br/><em>Generate Assembly.</em></h1>
+    <p>Describe any hardware task in plain English. AESARS calculates exact register values from the <strong style="color:var(--accent)">RM0368 Reference Manual</strong> and generates ARMCLANG-syntax ARM assembly — ready for Keil MDK.</p>
+    <div class="chips">
+      <span class="chip">GPIO Config</span>
+      <span class="chip">RCC Clocks</span>
+      <span class="chip">TIM / PWM</span>
+      <span class="chip">USART</span>
+      <span class="chip">I2C / SPI</span>
+      <span class="chip">NVIC Interrupts</span>
+      <span class="chip">ARMCLANG Syntax</span>
+      <span class="chip">PROC / ENDP</span>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════
+     GENERATOR
+     ══════════════════════════════════════════ -->
+<section class="sec" id="generator">
+  <div class="wrap">
+    <div class="sec-eye">Core Tool</div>
+    <div class="sec-title">Hardware Task → Register + Assembly</div>
+
+    <div class="gen-card">
+      <!-- Two-pane input/preview -->
+      <div class="gen-two">
+        <div>
+          <div class="pane-hdr">
+            <div class="pane-hdr-l">
+              <div class="wdots"><span class="wd wr"></span><span class="wd wy"></span><span class="wd wg"></span></div>
+              task_description.txt
+            </div>
+            <div class="pane-hint">Ctrl+Enter to run</div>
+          </div>
+          <textarea id="taskInput"
+            placeholder="e.g.  Configure PA5 as push-pull output at high speed and blink it using TIM2&#10;&#10;e.g.  Set up USART2 at 115200 baud on PA2 TX / PA3 RX&#10;&#10;e.g.  PA0 input with pull-up to read a button state&#10;&#10;e.g.  50Hz PWM on TIM1 CH1 (PA8) for servo motor control"></textarea>
+        </div>
+        <hr class="vdiv"/>
+        <div>
+          <div class="pane-hdr">
+            <div class="pane-hdr-l">
+              <div class="wdots"><span class="wd wr"></span><span class="wd wy"></span><span class="wd wg"></span></div>
+              aesars_output.log
+            </div>
+          </div>
+          <div class="out-body" id="quickOut">
+            <div class="ph">
+              <span class="ph-icon">⚙</span>
+              <span>Awaiting task description…</span>
+              <span style="font-size:.68rem;opacity:.5">Register config + ARM assembly will appear here</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Status bar -->
+      <div class="sbar">
+        <span class="sdot ok" id="sdot"></span>
+        <span class="stxt" id="stxt">Ready — enter a hardware task and press Generate</span>
+        <span style="font-family:'JetBrains Mono',monospace;font-size:.62rem;color:var(--accent);background:var(--accent-d);border:1px solid rgba(0,232,200,.2);border-radius:4px;padding:1px 8px;letter-spacing:.06em">⚙ RM0368</span>
+      </div>
+
+      <!-- Bottom bar -->
+      <div class="gen-bot">
+        <div class="eg-wrap">
+          <span class="eg-lbl">Examples:</span>
+          <span class="eg" onclick="fillEx('Blink LED on PA5 at 1Hz using TIM2 interrupt')">Blink PA5</span>
+          <span class="eg" onclick="fillEx('Configure USART2 at 115200 baud on PA2 TX and PA3 RX')">USART2 115200</span>
+          <span class="eg" onclick="fillEx('Configure PA0 as input with pull-up resistor to read button state')">Button PA0</span>
+          <span class="eg" onclick="fillEx('Generate 50Hz PWM on TIM1 CH1 PA8 for servo motor')">Servo PWM</span>
+        </div>
+        <div class="acts">
+          <button class="btn-clr" onclick="clearAll()">Clear</button>
+          <button class="btn-gen" id="genBtn" onclick="generate()">
+            <span class="spin" id="spin"></span>
+            <span class="lbl">⚡ Generate</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Result panels -->
+      <div class="rp-wrap" id="rpWrap">
+        <div class="rtabs">
+          <button class="rtab on" onclick="showTab('reg',this)">📋 Registers</button>
+          <button class="rtab" onclick="showTab('asm',this)">🔧 Assembly</button>
+          <button class="rtab" onclick="showTab('sum',this)">📝 Summary</button>
+        </div>
+        <div class="rpanel on" id="tab-reg"><div id="regTbl"></div></div>
+        <div class="rpanel" id="tab-asm">
+          <div class="asm" id="asmBox">
+            <button class="cpybtn" onclick="copyAsm()">📋 Copy</button>
+            <pre id="asmPre"></pre>
+          </div>
+        </div>
+        <div class="rpanel" id="tab-sum"><div id="sumBox" style="font-size:.88rem;color:var(--text);line-height:1.85"></div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════
+     REFERENCE
+     ══════════════════════════════════════════ -->
+<section class="sec" id="reference">
+  <div class="wrap">
+    <div class="sec-eye">Documentation</div>
+    <div class="sec-title">Quick Reference — STM32F401 & ARMCLANG</div>
+    <div class="rgrid">
+
+      <div class="rcard">
+        <div class="rcard-hdr"><div class="rico">🔌</div><div><div class="rctitle">GPIO MODER Register</div></div></div>
+        <div class="rcsub">2-bit mode field per pin (RM0368 §8.4.1). Offset +0x00 from GPIO base address.</div>
+        <table class="qrtbl">
+          <tr><td>00</td><td>Input mode (reset state)</td></tr>
+          <tr><td>01</td><td>General purpose output</td></tr>
+          <tr><td>10</td><td>Alternate function mode</td></tr>
+          <tr><td>11</td><td>Analog mode</td></tr>
+        </table>
+        <div class="rtags">
+          <span class="rttag">GPIOA: 0x40020000</span>
+          <span class="rttag">GPIOB: 0x40020400</span>
+          <span class="rttag">GPIOC: 0x40020800</span>
+        </div>
+      </div>
+
+      <div class="rcard">
+        <div class="rcard-hdr"><div class="rico">📤</div><div><div class="rctitle">OTYPER / OSPEEDR</div></div></div>
+        <div class="rcsub">Output type (§8.4.2) and speed (§8.4.3). Offsets +0x04 and +0x08.</div>
+        <table class="qrtbl">
+          <tr><td>OTYPER=0</td><td>Push-pull output</td></tr>
+          <tr><td>OTYPER=1</td><td>Open-drain output</td></tr>
+          <tr><td>OSPEEDR=00</td><td>Low speed 2 MHz</td></tr>
+          <tr><td>OSPEEDR=01</td><td>Medium 25 MHz</td></tr>
+          <tr><td>OSPEEDR=10</td><td>High speed 50 MHz</td></tr>
+          <tr><td>OSPEEDR=11</td><td>Very high 100 MHz</td></tr>
+        </table>
+      </div>
+
+      <div class="rcard">
+        <div class="rcard-hdr"><div class="rico">⬆️</div><div><div class="rctitle">PUPDR Register</div></div></div>
+        <div class="rcsub">Pull-up / pull-down configuration (RM0368 §8.4.4). Offset +0x0C from GPIO base.</div>
+        <table class="qrtbl">
+          <tr><td>00</td><td>No pull-up / pull-down</td></tr>
+          <tr><td>01</td><td>Pull-up enabled</td></tr>
+          <tr><td>10</td><td>Pull-down enabled</td></tr>
+          <tr><td>11</td><td>Reserved</td></tr>
+        </table>
+      </div>
+
+      <div class="rcard">
+        <div class="rcard-hdr"><div class="rico">🕐</div><div><div class="rctitle">RCC Clock Enable</div></div></div>
+        <div class="rcsub">Enable peripheral clocks before access (RM0368 §6). AHB1/APB1/APB2 buses.</div>
+        <table class="qrtbl">
+          <tr><td>AHB1ENR</td><td>0x40023830 · GPIO A–E</td></tr>
+          <tr><td>APB1ENR</td><td>0x40023840 · TIM2–5, USART2–3</td></tr>
+          <tr><td>APB2ENR</td><td>0x40023844 · TIM1, USART1, SPI1</td></tr>
+          <tr><td>GPIOAEN</td><td>Bit 0 of AHB1ENR</td></tr>
+          <tr><td>GPIOBEN</td><td>Bit 1 of AHB1ENR</td></tr>
+          <tr><td>TIM2EN</td><td>Bit 0 of APB1ENR</td></tr>
+        </table>
+      </div>
+
+      <div class="rcard">
+        <div class="rcard-hdr"><div class="rico">🔤</div><div><div class="rctitle">ARMCLANG Syntax Rules</div></div></div>
+        <div class="rcsub">Keil MDK armasm unified syntax conventions for Cortex-M4 (THUMB ISA).</div>
+        <table class="qrtbl">
+          <tr><td>Labels</td><td>Column 0, zero indent</td></tr>
+          <tr><td>Instructions</td><td>TAB-indented</td></tr>
+          <tr><td>PROC/ENDP</td><td>Required function wrappers</td></tr>
+          <tr><td>MOVW/MOVT</td><td>Split 32-bit immediates</td></tr>
+          <tr><td>THUMB</td><td>ISA directive required</td></tr>
+          <tr><td>EXPORT</td><td>Expose symbol globally</td></tr>
+          <tr><td>ALIGN</td><td>Required after literal pools</td></tr>
+        </table>
+      </div>
+
+      <div class="rcard">
+        <div class="rcard-hdr"><div class="rico">🗺️</div><div><div class="rctitle">STM32F401 Memory Map</div></div></div>
+        <div class="rcsub">Key peripheral base addresses — RM0368 §2.3. STM32F401RCT6 specific values.</div>
+        <table class="qrtbl">
+          <tr><td>Flash</td><td>0x08000000 (256 KB)</td></tr>
+          <tr><td>SRAM1</td><td>0x20000000 (96 KB)</td></tr>
+          <tr><td>GPIOA</td><td>0x40020000</td></tr>
+          <tr><td>TIM1</td><td>0x40010000</td></tr>
+          <tr><td>TIM2</td><td>0x40000000</td></tr>
+          <tr><td>USART1</td><td>0x40011000</td></tr>
+          <tr><td>USART2</td><td>0x40004400</td></tr>
+          <tr><td>SPI1</td><td>0x40013000</td></tr>
+          <tr><td>I2C1</td><td>0x40005400</td></tr>
+          <tr><td>NVIC</td><td>0xE000E100</td></tr>
+        </table>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════
+     CONVERTER
+     ══════════════════════════════════════════ -->
+<section class="sec" id="converter">
+  <div class="wrap">
+    <div class="sec-eye">Utilities</div>
+    <div class="sec-title">Number Base Converter</div>
+    <div class="ccard">
+      <div class="ccard-hdr">
+        <span class="ccard-hdr-icon">⇄</span>
+        <div>
+          <div class="ccard-hdr-title">HEX / DEC / BIN / OCT</div>
+          <div class="ccard-hdr-sub">Enter any value — all formats update instantly. Includes 32-bit register bit visualization.</div>
+        </div>
+      </div>
+      <div class="cbody">
+        <div class="cfield">
+          <label class="clabel">Hexadecimal (0x…)</label>
+          <input class="cinput" id="hexIn" placeholder="0x40020000" oninput="convFrom('hex')"/>
+        </div>
+        <div class="cfield">
+          <label class="clabel">Decimal</label>
+          <input class="cinput" id="decIn" placeholder="1073872896" oninput="convFrom('dec')"/>
+        </div>
+        <div class="cfield">
+          <label class="clabel">Binary (0b…)</label>
+          <input class="cinput" id="binIn" placeholder="0b01000000…" oninput="convFrom('bin')"/>
+        </div>
+        <div class="cfield">
+          <label class="clabel">Octal (0o…)</label>
+          <input class="cinput" id="octIn" placeholder="0o10000000000" oninput="convFrom('oct')"/>
+        </div>
+      </div>
+      <div class="cacts">
+        <button class="btn-cc" onclick="convClear()">Clear All</button>
+        <div class="cnote" id="cnote"></div>
+      </div>
+      <div class="bitview" id="bitview" style="display:none">
+        <div class="bitlbl">32-bit Register View &nbsp;[Bit 31 → Bit 0]</div>
+        <div class="brow" id="brow"></div>
+        <div class="brow" style="margin-top:4px" id="brow2"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div style="height:55px"></div>
+
+<footer>
+  <div class="wrap">
+    <div class="finner">
+      <div>AESARS · ARM Embedded Systems Assisted Register Setup</div>
+      <div>STM32F401RCT6 · RM0368 · ARMCLANG (Keil MDK) · ARM Cortex-M4</div>
+      <div>Built by <a href="https://adam-ehab32.github.io/My_portfolio/" target="_blank">Adam Ehab</a> · Cairo University · Faculty of Engineering · CMP29</div>
+    </div>
+  </div>
+</footer>
+
+<!-- ABOUT BUTTON -->
+<div class="abt-anchor">
+  <button class="abt-btn" onclick="openAbout()">ℹ &nbsp;About AESARS</button>
+</div>
+
+<!-- ABOUT MODAL -->
+<div class="moverlay" id="modal" onclick="closeOut(event)">
+  <div class="mbox">
+    <button class="mclose" onclick="closeAbout()">✕</button>
+
+    <!-- Hadith -->
+    <div class="hadith-box">
+      <div class="hadith-mark">"</div>
+      <p class="hadith-ar" dir="rtl" lang="ar">أحبُّ الناسِ إلى اللهِ أنْفَعُهُمْ لِلنَّاسِ</p>
+      <p class="hadith-tr">The most beloved of people to Allah are those most beneficial to people.</p>
+    </div>
+    <p class="mdesc">
+      <strong>AESARS</strong> is a register configuration tool for <strong>STM32F401RCT6</strong> development.
+      Describe any hardware task in plain English — AESARS generates fully
+      <strong>RM0368-compliant register configurations</strong> and production-ready
+      <strong>ARMCLANG ARM assembly</strong> code for Keil MDK.<br/><br/>
+      Built as a learning and productivity tool for <strong>CMP29 students</strong> at Cairo University,
+      Faculty of Engineering, Computer Department.
+    </p>
+    <div class="mlinks">
+      <a class="mlink" href="https://www.linkedin.com/in/adam-ehab-" target="_blank">
+        <div class="micon li">in</div>
+        <div class="mlt"><div class="mlt1">LinkedIn</div><div class="mlt2">linkedin.com/in/adam-ehab-</div></div>
+        <span class="marr">↗</span>
+      </a>
+      <a class="mlink" href="https://github.com/Adam-Ehab32" target="_blank">
+        <div class="micon gh">⌨</div>
+        <div class="mlt"><div class="mlt1">GitHub</div><div class="mlt2">github.com/Adam-Ehab32</div></div>
+        <span class="marr">↗</span>
+      </a>
+      <a class="mlink" href="https://adam-ehab32.github.io/My_portfolio/" target="_blank">
+        <div class="micon pf">⚙</div>
+        <div class="mlt"><div class="mlt1">Portfolio</div><div class="mlt2">adam-ehab32.github.io/My_portfolio/</div></div>
+        <span class="marr">↗</span>
+      </a>
+    </div>
+    <div class="mfooter">AESARS v2.0 · STM32F401RCT6 · RM0368 · Keil ARMCLANG · Cairo University</div>
+  </div>
+</div>
+
+<script>
+/* ══ CANVAS RAIN ══ */
+(function(){
+  const c=document.getElementById('bgCanvas');
+  const ctx=c.getContext('2d');
+  let W,H,drops=[];
+  const chars='01アイウエオカキクケコ0x ABCDEF'.split('');
+  function resize(){W=c.width=innerWidth;H=c.height=innerHeight;drops=[];for(let i=0;i<W/22;i++)drops.push(Math.random()*H/-20)}
+  resize();window.addEventListener('resize',resize);
+  function draw(){
+    ctx.fillStyle='rgba(0,4,8,.07)';ctx.fillRect(0,0,W,H);
+    ctx.fillStyle='#00e8c8';ctx.font='13px JetBrains Mono,monospace';
+    drops.forEach((y,i)=>{
+      ctx.globalAlpha=Math.random()*.7+.1;
+      ctx.fillText(chars[Math.floor(Math.random()*chars.length)],i*22,y*20);
+      if(y*20>H&&Math.random()>.97)drops[i]=0;
+      drops[i]+=.4+Math.random()*.3;
+    });
+    ctx.globalAlpha=1;
+  }
+  setInterval(draw,60);
+})();
+
+/* ══ THEME ══ */
+let theme='dark';
+function toggleTheme(){
+  theme=theme==='dark'?'light':'dark';
+  document.documentElement.setAttribute('data-theme',theme);
+  document.getElementById('nourIcon').textContent=theme==='dark'?'☀️':'🌙';
+  document.getElementById('nourLabel').textContent=theme==='dark'?'NOUR':'ZALAM';
+}
+
+/* ══ ABOUT ══ */
+function openAbout(){document.getElementById('modal').classList.add('on')}
+function closeAbout(){document.getElementById('modal').classList.remove('on')}
+function closeOut(e){if(e.target.id==='modal')closeAbout()}
+
+/* ══ TABS ══ */
+function showTab(id,btn){
+  document.querySelectorAll('.rtab').forEach(t=>t.classList.remove('on'));
+  document.querySelectorAll('.rpanel').forEach(p=>p.classList.remove('on'));
+  btn.classList.add('on');document.getElementById('tab-'+id).classList.add('on');
+}
+
+function fillEx(t){document.getElementById('taskInput').value=t}
+
+function clearAll(){
+  document.getElementById('taskInput').value='';
+  document.getElementById('quickOut').innerHTML=`<div class="ph"><span class="ph-icon">⚙</span><span>Awaiting task description…</span><span style="font-size:.68rem;opacity:.5">Register config + ARM assembly will appear here</span></div>`;
+  document.getElementById('rpWrap').classList.remove('on');
+  setSt('ok','Ready — enter a hardware task and press Generate');
+}
+
+function setSt(cls,msg){
+  document.getElementById('sdot').className='sdot '+cls;
+  document.getElementById('stxt').textContent=msg;
+}
+
+/* ══ SYNTAX HIGHLIGHT ══ */
+function hl(c){
+  return c
+    .replace(/;[^\n]*/g,m=>`<span class="ac">${m}</span>`)
+    .replace(/\b(AREA|THUMB|EXPORT|IMPORT|END|PROC|ENDP|ALIGN|DCD|DCB|SPACE|EQU|GLOBAL|EXTERN|PRESERVE8|REQUIRE8)\b/g,m=>`<span class="ad">${m}</span>`)
+    .replace(/\b(MOV|MOVW|MOVT|LDR|STR|LDRB|STRB|LDRH|STRH|ADD|SUB|AND|ORR|EOR|BIC|LSL|LSR|ASR|ROR|B|BL|BX|BLX|BEQ|BNE|BGT|BLT|BGE|BLE|CMP|PUSH|POP|NOP|CBZ|CBNZ|IT|MRS|MSR|SUBS|ADDS|MUL)\b/g,m=>`<span class="ak">${m}</span>`)
+    .replace(/\b(R0|R1|R2|R3|R4|R5|R6|R7|R8|R9|R10|R11|R12|SP|LR|PC|r0|r1|r2|r3|r4|r5|r6|r7|r8|r9|r10|r11|r12|sp|lr|pc)\b/g,m=>`<span class="ar">${m}</span>`)
+    .replace(/#(0x[0-9A-Fa-f]+|\d+)/g,m=>`<span class="an">${m}</span>`);
+}
+
+function copyAsm(){
+  const text = document.getElementById('asmPre').textContent;
+  const btn  = document.querySelector('.cpybtn');
+
+  /* Try modern Clipboard API first (HTTPS / localhost) */
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(text).then(()=>{
+      btn.textContent='✅ Copied!';
+      setTimeout(()=>btn.textContent='📋 Copy',2000);
+    }).catch(()=>_fallbackCopy(text,btn));
+    return;
+  }
+  /* Fallback: textarea + execCommand (works on file:// and HTTP) */
+  _fallbackCopy(text,btn);
+}
+
+function _fallbackCopy(text,btn){
+  const ta=document.createElement('textarea');
+  ta.value=text;
+  ta.style.cssText='position:fixed;top:-9999px;left:-9999px;opacity:0';
+  document.body.appendChild(ta);
+  ta.focus();ta.select();
+  try{
+    document.execCommand('copy');
+    btn.textContent='✅ Copied!';
+    setTimeout(()=>btn.textContent='📋 Copy',2000);
+  }catch(e){
+    btn.textContent='⚠ Select & copy manually';
+    setTimeout(()=>btn.textContent='📋 Copy',3000);
+  }
+  document.body.removeChild(ta);
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   AESARS REGISTER ENGINE  —  100% DATASHEET BASED
+   STM32F401RCT6 · ARM Cortex-M4
+   Sources:
+     • STM32F401 Reference Manual  RM0368 Rev 5
+     • ARM Cortex-M4 Technical Reference Manual (ARM DDI 0439)
+     • ARMv7-M Architecture Reference Manual (ARM DDI 0403)
+     • Keil MDK armasm User Guide (Version 5 / ARMCLANG)
+   ══════════════════════════════════════════════════════════════════ */
+
+/* ══════════════════════════════════════════════════════════════════
+   ARM CORTEX-M4 INSTRUCTION SET REFERENCE
+   Source: ARMv7-M Architecture Reference Manual (ARM DDI 0403E.e)
+          ARM Cortex-M4 TRM (ARM DDI 0439B)
+          Keil MDK armasm 5 User Guide
+   ══════════════════════════════════════════════════════════════════ */
+const ARM = {
+  /* ── SYNTAX RULES (Keil ARMCLANG / armasm Unified Syntax) ─────────
+     Ref: Keil MDK armasm User Guide §3                              */
+  SYNTAX: {
+    LABEL_COL:    'Labels must start at column 0 (no leading whitespace)',
+    INSTR_INDENT: 'Instructions must be TAB-indented (\\t)',
+    COMMENT:      'Comments begin with semicolon ; on same line as instruction',
+    DIRECTIVES: {
+      AREA:     'AREA name,attr — defines a named section (CODE/DATA/READONLY)',
+      THUMB:    'THUMB — selects Thumb-2 (T32) instruction set for Cortex-M4',
+      EXPORT:   'EXPORT sym — makes sym visible to linker (public symbol)',
+      IMPORT:   'IMPORT sym — declares external symbol used in this file',
+      PROC:     'label PROC — marks start of a procedure (function)',
+      ENDP:     'ENDP — marks end of a procedure, must match PROC',
+      ALIGN:    'ALIGN n — aligns to n-byte boundary; required after literal pools',
+      DCD:      'DCD val — allocates 4 bytes of word-aligned data',
+      DCB:      'DCB val — allocates 1 byte of data',
+      EQU:      'name EQU val — defines a numeric constant (like #define)',
+      END:      'END — marks end of source file, mandatory',
+      PRESERVE8:'PRESERVE8 — declares stack is 8-byte aligned (required by AAPCS)',
+      REQUIRE8: 'REQUIRE8 — asserts caller preserves 8-byte stack alignment',
+    }
+  },
+
+  /* ── DATA MOVEMENT INSTRUCTIONS ───────────────────────────────────
+     Ref: ARMv7-M ARM §A7.7 (Data-processing instructions)          */
+  DATA_MOVE: {
+    MOV:  { syntax:'MOV Rd, #imm8',  desc:'Move 8-bit immediate into Rd. imm8 range 0-255 (Thumb-2 allows modified immediates up to 32-bit via encoding)',  flags:'N,Z', cycles:1 },
+    MOVW: { syntax:'MOVW Rd, #imm16', desc:'Move 16-bit zero-extended immediate into Rd[15:0], clears Rd[31:16]. Use for lower 16 bits of a 32-bit address', flags:'—', cycles:1 },
+    MOVT: { syntax:'MOVT Rd, #imm16', desc:'Move 16-bit immediate into Rd[31:16], does NOT affect Rd[15:0]. Combine with MOVW to load full 32-bit constant', flags:'—', cycles:1 },
+    MVN:  { syntax:'MVN Rd, Rn',      desc:'Bitwise NOT of Rn stored in Rd', flags:'N,Z', cycles:1 },
+    /* MOVW/MOVT 32-bit address load pattern — ARM DDI 0403 §A5.2.4 */
+    ADDR32_PATTERN: 'MOVW Rd, #(addr & 0xFFFF)  ; lower 16 bits\n\tMOVT Rd, #(addr >> 16)     ; upper 16 bits',
+  },
+
+  /* ── LOAD / STORE INSTRUCTIONS ────────────────────────────────────
+     Ref: ARMv7-M ARM §A7.7 (Load/Store word and unsigned byte)     */
+  LOAD_STORE: {
+    LDR:  { syntax:'LDR Rt, [Rn, #off]', desc:'Load 32-bit word from memory[Rn+off] into Rt. off range: 0..4095 (positive) or -255..0 (negative pre-indexed)', cycles:2 },
+    STR:  { syntax:'STR Rt, [Rn, #off]', desc:'Store 32-bit word from Rt to memory[Rn+off]', cycles:2 },
+    LDRB: { syntax:'LDRB Rt, [Rn, #off]',desc:'Load unsigned byte (zero-extended to 32 bits)', cycles:2 },
+    STRB: { syntax:'STRB Rt, [Rn, #off]',desc:'Store byte (bits[7:0] of Rt)', cycles:2 },
+    LDRH: { syntax:'LDRH Rt, [Rn, #off]',desc:'Load unsigned halfword (16-bit, zero-extended)', cycles:2 },
+    STRH: { syntax:'STRH Rt, [Rn, #off]',desc:'Store halfword (bits[15:0] of Rt)', cycles:2 },
+    PUSH: { syntax:'PUSH {reglist}',      desc:'Push registers onto full-descending stack (SP decrements before each store). Preserves R4-R11, LR per AAPCS', cycles:'1 per reg' },
+    POP:  { syntax:'POP {reglist}',       desc:'Pop registers from stack (loads then increments SP)', cycles:'1 per reg' },
+    /* Peripheral register access pattern */
+    PERIPH_RD:  'LDR  R1, [R0]           ; read  32-bit peripheral register (R0=base addr)\n\tLDR  R1, [R0, #off]     ; read  with byte offset',
+    PERIPH_WR:  'STR  R1, [R0]           ; write 32-bit peripheral register\n\tSTR  R1, [R0, #off]     ; write with byte offset',
+  },
+
+  /* ── ARITHMETIC INSTRUCTIONS ───────────────────────────────────────
+     Ref: ARMv7-M ARM §A7.7                                          */
+  ARITHMETIC: {
+    ADD:  { syntax:'ADD Rd, Rn, #imm',  desc:'Rd = Rn + imm. imm can be 0-4095 (12-bit) in Thumb-2 encoding', flags:'N,Z,C,V', cycles:1 },
+    ADDS: { syntax:'ADDS Rd, Rn, Rm',   desc:'ADD updating APSR flags (required for conditional branches)', flags:'N,Z,C,V', cycles:1 },
+    SUB:  { syntax:'SUB Rd, Rn, #imm',  desc:'Rd = Rn - imm', flags:'N,Z,C,V', cycles:1 },
+    SUBS: { syntax:'SUBS Rd, Rn, #imm', desc:'SUB updating APSR flags', flags:'N,Z,C,V', cycles:1 },
+    MUL:  { syntax:'MUL Rd, Rn, Rm',   desc:'Rd = Rn * Rm (32-bit result, upper 32 bits discarded)', flags:'N,Z', cycles:1 },
+    UDIV: { syntax:'UDIV Rd, Rn, Rm',  desc:'Unsigned integer divide: Rd = Rn / Rm. Available on Cortex-M4 (IDIV extension). Rounds toward zero', flags:'—', cycles:'2-12' },
+    SDIV: { syntax:'SDIV Rd, Rn, Rm',  desc:'Signed integer divide. Same as UDIV but signed', flags:'—', cycles:'2-12' },
+  },
+
+  /* ── LOGICAL / BIT MANIPULATION ───────────────────────────────────
+     Ref: ARMv7-M ARM §A7.7                                          */
+  LOGICAL: {
+    AND:  { syntax:'AND Rd, Rn, Rm/#imm', desc:'Bitwise AND. Use to clear bits: AND Rd, Rd, ~mask', flags:'N,Z', cycles:1 },
+    ORR:  { syntax:'ORR Rd, Rn, Rm/#imm', desc:'Bitwise OR.  Use to set   bits: ORR Rd, Rd, mask',  flags:'N,Z', cycles:1 },
+    EOR:  { syntax:'EOR Rd, Rn, Rm/#imm', desc:'Bitwise XOR. Use to toggle bits',                    flags:'N,Z', cycles:1 },
+    BIC:  { syntax:'BIC Rd, Rn, Rm/#imm', desc:'Bit Clear: Rd = Rn AND NOT(Rm). Clears bits in Rm that are 1. Preferred for clearing bit fields', flags:'N,Z', cycles:1 },
+    LSL:  { syntax:'LSL Rd, Rn, #n',      desc:'Logical Shift Left by n (0-31). Equivalent to multiply by 2^n. Used to position bit fields', flags:'N,Z,C', cycles:1 },
+    LSR:  { syntax:'LSR Rd, Rn, #n',      desc:'Logical Shift Right by n (unsigned). Upper bits filled with 0', flags:'N,Z,C', cycles:1 },
+    ASR:  { syntax:'ASR Rd, Rn, #n',      desc:'Arithmetic Shift Right (signed). Upper bits filled with sign bit', flags:'N,Z,C', cycles:1 },
+    ROR:  { syntax:'ROR Rd, Rn, Rm',      desc:'Rotate Right by Rm[7:0] bits', flags:'N,Z,C', cycles:1 },
+    /* RMW (Read-Modify-Write) pattern for peripheral registers */
+    RMW_SET:   'LDR R1,[R0]  ; read  current register value\n\tORR R1,R1,R2 ; set   bits (R2=mask)\n\tSTR R1,[R0]  ; write back',
+    RMW_CLEAR: 'LDR R1,[R0]  ; read  current register value\n\tBIC R1,R1,R2 ; clear bits (R2=mask)\n\tSTR R1,[R0]  ; write back',
+    RMW_FIELD: 'LDR R1,[R0]  ; read  current register value\n\tBIC R1,R1,R2 ; clear field (R2=clear_mask)\n\tORR R1,R1,R3 ; set   field value (R3=value<<shift)\n\tSTR R1,[R0]  ; write back',
+  },
+
+  /* ── COMPARE / TEST ────────────────────────────────────────────────
+     Ref: ARMv7-M ARM §A7.7                                          */
+  COMPARE: {
+    CMP:  { syntax:'CMP Rn, Rm/#imm', desc:'Sets APSR flags based on Rn - operand2 (result discarded). Used before conditional branches', flags:'N,Z,C,V', cycles:1 },
+    TST:  { syntax:'TST Rn, Rm/#imm', desc:'Sets APSR flags based on Rn AND operand2. Tests if bits are set', flags:'N,Z', cycles:1 },
+    CMN:  { syntax:'CMN Rn, Rm',      desc:'Compare Negative: flags from Rn + Rm', flags:'N,Z,C,V', cycles:1 },
+  },
+
+  /* ── BRANCH INSTRUCTIONS ───────────────────────────────────────────
+     Ref: ARMv7-M ARM §A7.7                                          */
+  BRANCH: {
+    B:    { syntax:'B  label',   desc:'Unconditional branch. Range: ±16MB in Thumb-2', cycles:1 },
+    BL:   { syntax:'BL label',   desc:'Branch with Link: branch to label, saves return address in LR (R14)', cycles:1 },
+    BX:   { syntax:'BX Rm',      desc:'Branch and Exchange: branch to address in Rm, switch ISA if bit0=0. BX LR = return from function', cycles:1 },
+    BLX:  { syntax:'BLX Rm',     desc:'Branch with Link and Exchange to address in Rm', cycles:1 },
+    BEQ:  { syntax:'BEQ label',  desc:'Branch if Equal (Z=1)', cycles:1 },
+    BNE:  { syntax:'BNE label',  desc:'Branch if Not Equal (Z=0)', cycles:1 },
+    BGT:  { syntax:'BGT label',  desc:'Branch if Greater Than signed (Z=0 AND N=V)', cycles:1 },
+    BLT:  { syntax:'BLT label',  desc:'Branch if Less Than signed (N≠V)', cycles:1 },
+    BGE:  { syntax:'BGE label',  desc:'Branch if Greater or Equal signed (N=V)', cycles:1 },
+    BLE:  { syntax:'BLE label',  desc:'Branch if Less or Equal signed (Z=1 OR N≠V)', cycles:1 },
+    CBZ:  { syntax:'CBZ Rn, label', desc:'Compare and Branch if Zero. Rn must be R0-R7. No flag change. Range: 0 to +126 bytes', cycles:1 },
+    CBNZ: { syntax:'CBNZ Rn, label',desc:'Compare and Branch if Not Zero', cycles:1 },
+  },
+
+  /* ── CORTEX-M4 SPECIFIC ────────────────────────────────────────────
+     Ref: ARM Cortex-M4 TRM (ARM DDI 0439B) §3                      */
+  CORTEX_M4: {
+    NOP:   { syntax:'NOP', desc:'No Operation. Pipeline filler, one cycle', cycles:1 },
+    WFI:   { syntax:'WFI', desc:'Wait For Interrupt — enter low-power sleep until interrupt. Saves power', cycles:'—' },
+    WFE:   { syntax:'WFE', desc:'Wait For Event — sleep until event or interrupt', cycles:'—' },
+    SEV:   { syntax:'SEV', desc:'Send Event — wakes cores waiting on WFE', cycles:1 },
+    DSB:   { syntax:'DSB', desc:'Data Synchronization Barrier — ensures all memory accesses complete before next instruction', cycles:'—' },
+    DMB:   { syntax:'DMB', desc:'Data Memory Barrier — memory ordering barrier', cycles:'—' },
+    ISB:   { syntax:'ISB', desc:'Instruction Synchronization Barrier — flushes pipeline, required after changing system registers (e.g. SCB)', cycles:'—' },
+    MRS:   { syntax:'MRS Rd, sysreg', desc:'Move from Special Register to general-purpose register. Access APSR, IPSR, EPSR, PRIMASK, FAULTMASK, BASEPRI, CONTROL, MSP, PSP', cycles:2 },
+    MSR:   { syntax:'MSR sysreg, Rn', desc:'Move from general-purpose register to Special Register', cycles:2 },
+    CPSIE: { syntax:'CPSIE i', desc:'Enable interrupts: clears PRIMASK (I=IRQ, F=FIQ)', cycles:1 },
+    CPSID: { syntax:'CPSID i', desc:'Disable interrupts: sets PRIMASK', cycles:1 },
+  },
+
+  /* ── REGISTER CONVENTION (AAPCS — ARM Procedure Call Standard) ────
+     Ref: ARM IHI0042F — Procedure Call Standard for ARM Architecture */
+  AAPCS: {
+    R0:  'Argument 1 / Return value 1 — caller-saved (scratch)',
+    R1:  'Argument 2 / Return value 2 — caller-saved',
+    R2:  'Argument 3 — caller-saved',
+    R3:  'Argument 4 — caller-saved',
+    R4:  'Variable register — CALLEE-SAVED (must restore before BX LR)',
+    R5:  'Variable register — CALLEE-SAVED',
+    R6:  'Variable register — CALLEE-SAVED',
+    R7:  'Variable register — CALLEE-SAVED',
+    R8:  'Variable register — CALLEE-SAVED',
+    R9:  'Platform register (sometimes static base) — CALLEE-SAVED',
+    R10: 'Variable register — CALLEE-SAVED',
+    R11: 'Frame pointer (FP) — CALLEE-SAVED',
+    R12: 'Intra-procedure-call scratch (IP) — caller-saved',
+    R13: 'Stack Pointer (SP) — must be 8-byte aligned at public interfaces',
+    R14: 'Link Register (LR) — stores return address after BL/BLX',
+    R15: 'Program Counter (PC) — current instruction address + 4 (pipeline)',
+    SAVED_BY_CALLEE: ['R4','R5','R6','R7','R8','R9','R10','R11'],
+    SCRATCH: ['R0','R1','R2','R3','R12'],
+    FUNCTION_PROLOGUE: 'PUSH {R4-R7, LR}   ; save callee-saved regs + return addr',
+    FUNCTION_EPILOGUE: 'POP  {R4-R7, PC}   ; restore regs and return (PC=old LR)',
+  },
+
+  /* ── CONDITION CODES (APSR flags) ─────────────────────────────────
+     Ref: ARMv7-M ARM §A7.3                                          */
+  CONDITIONS: {
+    EQ:'Z=1  Equal / zero',            NE:'Z=0  Not equal',
+    CS:'C=1  Carry set / unsigned ≥',  CC:'C=0  Carry clear / unsigned <',
+    MI:'N=1  Minus / negative',        PL:'N=0  Plus / positive or zero',
+    VS:'V=1  Overflow',                VC:'V=0  No overflow',
+    HI:'C=1 AND Z=0  Unsigned higher', LS:'C=0 OR  Z=1  Unsigned lower or same',
+    GE:'N=V  Signed ≥',               LT:'N≠V  Signed <',
+    GT:'Z=0 AND N=V  Signed >',        LE:'Z=1 OR  N≠V  Signed ≤',
+    AL:'Always (default)',
+  },
+
+  /* ── THUMB-2 ENCODING CONSTRAINTS ─────────────────────────────────
+     Ref: ARMv7-M ARM §A5 (Instruction encoding)                    */
+  ENCODING: {
+    MOV_IMM8:    'MOV Rd,#n — n must be 0-255 OR a modified immediate constant',
+    MOVW_IMM16:  'MOVW — any 16-bit value 0x0000..0xFFFF',
+    MOVT_IMM16:  'MOVT — any 16-bit value 0x0000..0xFFFF (loads to bits[31:16])',
+    LDR_OFFSET:  'LDR Rt,[Rn,#off] — off must be 0..4095 (12-bit unsigned) or -255..0',
+    ADD_IMM12:   'ADD Rd,Rn,#imm — imm is 12-bit (0..4095) in Thumb-2',
+    BRANCH_RANGE:'B  ±16MB  |  BL ±16MB  |  Bcond ±1MB  |  CBZ/CBNZ 0..+126',
+    THUMB_ONLY:  'Cortex-M4 executes ONLY Thumb-2 (T32) instructions. ARM (A32) state is NOT supported.',
+  },
+
+  /* ── STACK FRAME (EXCEPTION ENTRY) ────────────────────────────────
+     Ref: ARM Cortex-M4 TRM §2.3.7 (Exception entry and exit)       */
+  EXCEPTION_FRAME: {
+    desc: 'On exception entry hardware auto-saves: xPSR,PC,LR,R12,R3,R2,R1,R0 (SP aligned to 8 bytes)',
+    order_push: 'R0,R1,R2,R3,R12,LR,PC,xPSR pushed by hardware',
+    order_pop:  'Reversed on exception return (EXC_RETURN via BX LR)',
+    EXC_RETURN: '0xFFFFFFF9=MSP, 0xFFFFFFFD=PSP (Thread mode)',
+  },
+
+  /* ── PERIPHERAL ACCESS PATTERN SUMMARY ────────────────────────────
+     Best-practice for STM32 register RMW in ARMCLANG assembly      */
+  PERIPH_PATTERN: {
+    LOAD_ADDR:  '1. MOVW R0, #0xADDR_LO  ; load peripheral base address\n\tMOVT R0, #0xADDR_HI',
+    READ:       '2. LDR  R1, [R0]        ; read current register value',
+    CLEAR_BITS: '3. BIC  R1, R1, R2      ; clear target bit-field (R2=clear mask)',
+    SET_BITS:   '4. ORR  R1, R1, R2      ; set   target bit-field (R2=value<<shift)',
+    WRITE:      '5. STR  R1, [R0]        ; write modified value back to peripheral',
+    ATOMIC_SET: 'STR R2,[R0,#0x18]       ; atomic set via GPIO BSRR (no RMW needed)',
+  }
+};
+
+/* ── Assembly code quality helpers (using ARM reference data) ─────── */
+/* Emit proper AAPCS function prologue comment */
+function asmPrologue(name){
+  return `; ── AAPCS: callee-saved registers preserved per ARM IHI0042F ────\n`+
+         `\tPUSH\t{R4, LR}\t\t\t\t; save R4 (callee-saved) + LR (return addr)`;
+}
+function asmEpilogue(){
+  return `\tPOP\t{R4, PC}\t\t\t\t; restore R4, return (PC←LR via POP)`;
+}
+/* Emit DSB barrier comment (required after peripheral writes per Cortex-M4 TRM) */
+function asmDSB(reason){
+  return `\tDSB\t\t\t\t\t\t; Data Sync Barrier — ${reason} (Cortex-M4 TRM §3.4)`;
+}
+
+/* ── RM0368 Address Database ── */
+const DB = {
+  /* GPIO base addresses  RM0368 §2.3 Table 1 */
+  GPIO: { A:0x40020000, B:0x40020400, C:0x40020800, D:0x40020C00, E:0x40021000 },
+  /* GPIO register offsets  RM0368 §8.4 */
+  GO: { MODER:0x00, OTYPER:0x04, OSPEEDR:0x08, PUPDR:0x0C,
+        IDR:0x10, ODR:0x14, BSRR:0x18, AFRL:0x20, AFRH:0x24 },
+  /* RCC  RM0368 §6.3 */
+  RCC_AHB1ENR: 0x40023830,
+  RCC_APB1ENR: 0x40023840,
+  RCC_APB2ENR: 0x40023844,
+  /* RCC AHB1ENR GPIO enable bits  RM0368 §6.3.9 */
+  AHB1_GPIO: { A:0, B:1, C:2, D:3, E:4 },
+  /* Timer base addresses  RM0368 §2.3 */
+  TIM: { 1:0x40010000, 2:0x40000000, 3:0x40000400, 4:0x40000800, 5:0x40000C00 },
+  /* Timer register offsets  RM0368 §14.4 / §15.4 */
+  TO: { CR1:0x00, DIER:0x0C, SR:0x10, EGR:0x14,
+        CCMR1:0x18, CCMR2:0x1C, CCER:0x20,
+        PSC:0x28, ARR:0x2C,
+        CCR1:0x34, CCR2:0x38, CCR3:0x3C, CCR4:0x40, BDTR:0x44 },
+  /* APB1ENR timer bits  RM0368 §6.3.10 */
+  APB1_TIM: { 2:0, 3:1, 4:2, 5:3 },
+  /* APB2ENR timer bits  RM0368 §6.3.11 */
+  APB2_TIM: { 1:0 },
+  /* USART base addresses  RM0368 §2.3 */
+  USART: { 1:0x40011000, 2:0x40004400, 6:0x40011400 },
+  /* USART register offsets  RM0368 §19.6 */
+  UO: { SR:0x00, DR:0x04, BRR:0x08, CR1:0x0C, CR2:0x10, CR3:0x14 },
+  APB2_USART: { 1:4, 6:5 },
+  APB1_USART: { 2:17 },
+  /* I2C  RM0368 §18.6 */
+  I2C: { 1:0x40005400, 2:0x40005800, 3:0x40005C00 },
+  IO: { CR1:0x00, CR2:0x04, CCR:0x1C, TRISE:0x20 },
+  APB1_I2C: { 1:21, 2:22, 3:23 },
+  /* SPI  RM0368 §20.5 */
+  SPI: { 1:0x40013000, 2:0x40003800 },
+  SO: { CR1:0x00, CR2:0x04, SR:0x08, DR:0x0C },
+  APB2_SPI: { 1:12 },
+  APB1_SPI: { 2:14 },
+  /* Alternate function map  RM0368 §Annex — pinout alternate functions */
+  /* Format: 'PXN' -> AF number for a given peripheral signal */
+  AFMAP: {
+    USART1_TX:{'A9':7,'B6':7},   USART1_RX:{'A10':7,'B7':7},
+    USART2_TX:{'A2':7,'D5':7},   USART2_RX:{'A3':7,'D6':7},
+    USART6_TX:{'A11':8,'C6':8},  USART6_RX:{'A12':8,'C7':8},
+    TIM1_CH1: {'A8':1,'E9':1},   TIM1_CH2: {'A9':1,'E11':1},
+    TIM1_CH3: {'A10':1,'E13':1}, TIM1_CH4: {'A11':1,'E14':1},
+    TIM2_CH1: {'A0':1,'A5':1,'A15':1},
+    TIM2_CH2: {'A1':1,'B3':1},
+    TIM2_CH3: {'A2':1,'B10':1},
+    TIM2_CH4: {'A3':1,'B11':1},
+    TIM3_CH1: {'A6':2,'B4':2,'C6':2},
+    TIM3_CH2: {'A7':2,'B5':2,'C7':2},
+    TIM4_CH1: {'B6':2,'D12':2},  TIM4_CH2: {'B7':2,'D13':2},
+    I2C1_SCL: {'B6':4,'B8':4},   I2C1_SDA: {'B7':4,'B9':4},
+    I2C2_SCL: {'B10':4},         I2C2_SDA: {'B11':4},
+    I2C3_SCL: {'A8':4},          I2C3_SDA: {'C9':4},
+    SPI1_SCK: {'A5':5,'B3':5},   SPI1_MOSI:{'A7':5,'B5':5},
+    SPI1_MISO:{'A6':5,'B4':5},   SPI1_NSS: {'A4':5,'A15':5},
+    SPI2_SCK: {'B10':5,'B13':5}, SPI2_MOSI:{'B15':5,'C3':5},
+    SPI2_MISO:{'B14':5,'C2':5},
+  }
+};
+
+/* ── Formatting helpers ── */
+function H(n){ return '0x'+(n>>>0).toString(16).toUpperCase().padStart(8,'0'); }
+function Hlo(n){ return '0x'+((n>>>0)&0xFFFF).toString(16).toUpperCase().padStart(4,'0'); }
+function Hhi(n){ return '0x'+(((n>>>0)>>>16)&0xFFFF).toString(16).toUpperCase().padStart(4,'0'); }
+
+/* Load 32-bit address using MOVW/MOVT  — RM0368 ARMCLANG requirement */
+function mwt(reg, addr, cmt){
+  return `\tMOVW\t${reg}, #${Hlo(addr)}\t\t\t; ${cmt} — addr[15:0]\n`+
+         `\tMOVT\t${reg}, #${Hhi(addr)}\t\t\t; ${cmt} — addr[31:16]`;
+}
+/* Load mask value into R2  (uses MOV for ≤16-bit, MOVW/MOVT for wider) */
+function loadMask(val, cmt){
+  val = val>>>0;
+  if(val <= 0xFFFF)
+    return `\tMOV\tR2, #${H(val)}\t\t\t; ${cmt}`;
+  return `\tMOVW\tR2, #${Hlo(val)}\t\t\t; ${cmt} [15:0]\n`+
+         `\tMOVT\tR2, #${Hhi(val)}\t\t\t; ${cmt} [31:16]`;
+}
+/* Read peripheral register: R0=base, off=byte offset */
+function rd(off, cmt){
+  return off===0 ? `\tLDR\tR1, [R0]\t\t\t\t; ${cmt}`
+                 : `\tLDR\tR1, [R0, #${H(off)}]\t\t\t; ${cmt}`;
+}
+/* Write peripheral register */
+function wr(off, cmt){
+  return off===0 ? `\tSTR\tR1, [R0]\t\t\t\t; ${cmt}`
+                 : `\tSTR\tR1, [R0, #${H(off)}]\t\t\t; ${cmt}`;
+}
+
+/* ── Task parser ── */
+function parseTask(t){
+  const s = t.toLowerCase();
+  /* Extract all pin references e.g. PA5, PB13 */
+  const pinRe = /p([a-e])(\d+)/gi, pins=[];
+  let pm; while((pm=pinRe.exec(s))!==null) pins.push({port:pm[1].toUpperCase(),pin:parseInt(pm[2])});
+  const main = pins[0]||{port:'A',pin:5};
+  /* Feature detection */
+  const isOut   = /\boutput\b|blink|toggle|led|drive/.test(s);
+  const isIn    = /\binput\b|button|read|detect|switch/.test(s);
+  const isPWM   = /\bpwm\b|servo|duty\s*cycle/.test(s);
+  const isUSART = /usart|uart|serial/.test(s);
+  const isI2C   = /\bi2c\b/.test(s);
+  const isSPI   = /\bspi\b/.test(s);
+  /* Pull resistor */
+  const pullUp   = /pull.?up|pullup/.test(s);
+  const pullDown = /pull.?down|pulldown/.test(s);
+  /* Output config */
+  const openDrain = /open.?drain/.test(s);
+  /* Speed */
+  const ospeedr = /very.?high|100\s*mhz/.test(s)?3:/high\s*speed|50\s*mhz|fast/.test(s)?2:/medium|25\s*mhz/.test(s)?1:2;
+  /* Peripheral numbers */
+  const usartN = parseInt((s.match(/usart\s*(\d)/i)||s.match(/uart\s*(\d)/i)||[,2])[1]||2);
+  const timN   = parseInt((s.match(/tim\s*(\d)/i)||[,2])[1]||2);
+  const timCh  = parseInt((s.match(/ch(?:annel)?\s*(\d)/i)||[,1])[1]||1);
+  const i2cN   = parseInt((s.match(/i2c\s*(\d)/i)||[,1])[1]||1);
+  const spiN   = parseInt((s.match(/spi\s*(\d)/i)||[,1])[1]||1);
+  /* Baud  */
+  const baudM = s.match(/(\d+)\s*baud/i); const baud = baudM?parseInt(baudM[1]):9600;
+  /* PWM frequency */
+  const fM = s.match(/(\d+(?:\.\d+)?)\s*(k?hz)/i);
+  let pwmFreq=50; if(fM){pwmFreq=parseFloat(fM[1]);if(/khz/i.test(fM[2]))pwmFreq*=1000;}
+  /* I2C speed mode */
+  const i2cFast = /400\s*k|fast\s*mode/.test(s);
+  return {pins,main,isOut,isIn,isPWM,isUSART,isI2C,isSPI,
+          pullUp,pullDown,openDrain,ospeedr,
+          usartN,timN,timCh,i2cN,spiN,baud,pwmFreq,i2cFast};
+}
+
+/* ── Register record builders (pure datasheet values) ── */
+
+function regEnableGPIO(port){
+  const b=DB.AHB1_GPIO[port];
+  return {name:`RCC->AHB1ENR`,address:H(DB.RCC_AHB1ENR),
+    bit_field:`GPIO${port}EN  Bit ${b}`,value:H(1<<b),
+    description:`Enable GPIO${port} peripheral clock — RM0368 §6.3.9`};
+}
+function regMODER(port,pin,mode){
+  const base=DB.GPIO[port], sh=pin*2;
+  const modes=['Input (00)','Output (01)','Alternate Function (10)','Analog (11)'];
+  return {name:`GPIO${port}->MODER`,address:H(base+DB.GO.MODER),
+    bit_field:`MODER${pin}[${sh+1}:${sh}] = ${mode.toString(2).padStart(2,'0')}b`,
+    value:H(mode<<sh),description:`P${port}${pin} → ${modes[mode]} — RM0368 §8.4.1`};
+}
+function regOTYPER(port,pin,otyp){
+  const base=DB.GPIO[port];
+  return {name:`GPIO${port}->OTYPER`,address:H(base+DB.GO.OTYPER),
+    bit_field:`OT${pin}  Bit ${pin} = ${otyp}`,value:H(otyp<<pin),
+    description:`P${port}${pin} → ${otyp?'Open-drain':'Push-pull'} — RM0368 §8.4.2`};
+}
+function regOSPEEDR(port,pin,spd){
+  const base=DB.GPIO[port], sh=pin*2;
+  const sl=['Low 2MHz (00)','Medium 25MHz (01)','High 50MHz (10)','Very-High 100MHz (11)'];
+  return {name:`GPIO${port}->OSPEEDR`,address:H(base+DB.GO.OSPEEDR),
+    bit_field:`OSPEEDR${pin}[${sh+1}:${sh}] = ${spd.toString(2).padStart(2,'0')}b`,
+    value:H(spd<<sh),description:`P${port}${pin} → ${sl[spd]} — RM0368 §8.4.3`};
+}
+function regPUPDR(port,pin,pup){
+  const base=DB.GPIO[port], sh=pin*2;
+  const pl=['No pull (00)','Pull-up (01)','Pull-down (10)','Reserved (11)'];
+  return {name:`GPIO${port}->PUPDR`,address:H(base+DB.GO.PUPDR),
+    bit_field:`PUPDR${pin}[${sh+1}:${sh}] = ${pup.toString(2).padStart(2,'0')}b`,
+    value:H(pup<<sh),description:`P${port}${pin} → ${pl[pup]} — RM0368 §8.4.4`};
+}
+function regAFR(port,pin,af){
+  const base=DB.GPIO[port];
+  const hi=pin>=8, regOff=hi?DB.GO.AFRH:DB.GO.AFRL, lpin=hi?pin-8:pin, sh=lpin*4;
+  return {name:`GPIO${port}->${hi?'AFRH':'AFRL'}`,address:H(base+regOff),
+    bit_field:`AFR${pin}[${sh+3}:${sh}] = AF${af} (${af.toString(2).padStart(4,'0')}b)`,
+    value:H(af<<sh),description:`P${port}${pin} → Alternate Function AF${af} — RM0368 §8.4.9/10`};
+}
+
+/* ── Assembly code generators ── */
+
+function asmGPIOOut(port,pin,otyp,spd,pup){
+  const base=DB.GPIO[port], ebit=DB.AHB1_GPIO[port];
+  const clearMODER=0x03<<(pin*2), setMODER=0x01<<(pin*2);
+  const clearOSPEEDR=0x03<<(pin*2), setOSPEEDR=spd<<(pin*2);
+  const clearPUPDR=0x03<<(pin*2), setPUPDR=pup<<(pin*2);
+  const spdTxt=['Low','Medium','High','Very-High'][spd];
+  const pupTxt=['No pull','Pull-up','Pull-down'][pup];
+  return (
+`; ─────────────────────────────────────────────────────────
+; AESARS — GPIO${port} Pin ${pin} Output  |  RM0368 §8
+; GPIO${port} Base: ${H(base)}  |  RCC AHB1ENR: ${H(DB.RCC_AHB1ENR)}
+; Config: ${otyp?'Open-drain':'Push-pull'}, ${spdTxt} speed, ${pupTxt}
+; ─────────────────────────────────────────────────────────
+
+; ── 1. Enable GPIO${port} Clock (RCC AHB1ENR Bit ${ebit}) ─────────────
+${mwt('R0',DB.RCC_AHB1ENR,'RCC AHB1ENR')}
+${rd(0,'Read AHB1ENR current value')}
+${loadMask(1<<ebit,'GPIO'+port+'EN bit mask')}
+\tORR\tR1, R1, R2\t\t\t\t; Set GPIO${port}EN = 1
+${wr(0,'GPIO'+port+' clock enabled')}
+
+; ── 2. MODER${pin}[${pin*2+1}:${pin*2}] = 01  →  General-purpose output ──────
+${mwt('R0',base+DB.GO.MODER,'GPIO'+port+'->MODER')}
+${rd(0,'Read MODER')}
+${loadMask(clearMODER,'Clear mask MODER'+pin+'['+( pin*2+1)+':'+( pin*2)+']')}
+\tBIC\tR1, R1, R2\t\t\t\t; Clear MODER${pin} bits
+${loadMask(setMODER,'Set value = 01 (output)')}
+\tORR\tR1, R1, R2\t\t\t\t; MODER${pin} = 01
+${wr(0,'Write MODER')}
+
+; ── 3. OTYPER${pin} = ${otyp}  →  ${otyp?'Open-drain':'Push-pull'} ─────────────────────────
+${mwt('R0',base+DB.GO.OTYPER,'GPIO'+port+'->OTYPER')}
+${rd(0,'Read OTYPER')}
+${loadMask(1<<pin,'Clear/set OT'+pin+' bit')}
+\t${otyp?'ORR':'BIC'}\tR1, R1, R2\t\t\t\t; OT${pin} = ${otyp} (${otyp?'open-drain':'push-pull'})
+${wr(0,'Write OTYPER')}
+
+; ── 4. OSPEEDR${pin}[${pin*2+1}:${pin*2}] = ${spd.toString(2).padStart(2,'0')}b  →  ${spdTxt} speed ─────────────────
+${mwt('R0',base+DB.GO.OSPEEDR,'GPIO'+port+'->OSPEEDR')}
+${rd(0,'Read OSPEEDR')}
+${loadMask(clearOSPEEDR,'Clear OSPEEDR'+pin+' bits')}
+\tBIC\tR1, R1, R2
+${loadMask(setOSPEEDR,'Set '+spdTxt+' speed')}
+\tORR\tR1, R1, R2
+${wr(0,'Write OSPEEDR')}
+
+; ── 5. PUPDR${pin}[${pin*2+1}:${pin*2}] = ${pup.toString(2).padStart(2,'0')}b  →  ${pupTxt} ──────────────────────
+${mwt('R0',base+DB.GO.PUPDR,'GPIO'+port+'->PUPDR')}
+${rd(0,'Read PUPDR')}
+${loadMask(clearPUPDR,'Clear PUPDR'+pin+' bits')}
+\tBIC\tR1, R1, R2
+${pup?loadMask(setPUPDR,'Set '+pupTxt)+'\n\tORR\tR1, R1, R2':''}
+${wr(0,'Write PUPDR')}
+
+; ── 6. Drive P${port}${pin} HIGH via BSRR (atomic, no read-modify-write) ───
+${mwt('R0',base+DB.GO.BSRR,'GPIO'+port+'->BSRR')}
+${loadMask(1<<pin,'BS'+pin+' = bit '+pin+' → Set P'+port+pin+' HIGH')}
+\tSTR\tR2, [R0]\t\t\t\t; Atomic set P${port}${pin} = HIGH`
+  );
+}
+
+function asmGPIOIn(port,pin,pup){
+  const base=DB.GPIO[port], ebit=DB.AHB1_GPIO[port];
+  const clearPUPDR=0x03<<(pin*2), setPUPDR=pup<<(pin*2);
+  const pupTxt=['Floating (no pull)','Pull-up','Pull-down'][pup];
+  return (
+`; ─────────────────────────────────────────────────────────
+; AESARS — GPIO${port} Pin ${pin} Input  |  RM0368 §8
+; GPIO${port} Base: ${H(base)}  |  IDR Offset: 0x10
+; Config: ${pupTxt}
+; ─────────────────────────────────────────────────────────
+
+; ── 1. Enable GPIO${port} Clock ──────────────────────────────────
+${mwt('R0',DB.RCC_AHB1ENR,'RCC AHB1ENR')}
+${rd(0,'Read AHB1ENR')}
+${loadMask(1<<ebit,'GPIO'+port+'EN bit '+ebit)}
+\tORR\tR1, R1, R2
+${wr(0,'GPIO'+port+' clock on')}
+
+; ── 2. MODER${pin}[${pin*2+1}:${pin*2}] = 00  →  Input mode (reset state) ──────
+${mwt('R0',base+DB.GO.MODER,'GPIO'+port+'->MODER')}
+${rd(0,'Read MODER')}
+${loadMask(0x03<<(pin*2),'Clear MODER'+pin+' → Input (00)')}
+\tBIC\tR1, R1, R2\t\t\t\t; MODER${pin} = 00 = Input
+${wr(0,'Write MODER')}
+
+; ── 3. PUPDR${pin}[${pin*2+1}:${pin*2}] = ${pup.toString(2).padStart(2,'0')}b  →  ${pupTxt} ──────────────────────
+${mwt('R0',base+DB.GO.PUPDR,'GPIO'+port+'->PUPDR')}
+${rd(0,'Read PUPDR')}
+${loadMask(clearPUPDR,'Clear PUPDR'+pin)}
+\tBIC\tR1, R1, R2
+${pup?loadMask(setPUPDR,'Set '+pupTxt)+'\n\tORR\tR1, R1, R2\t\t\t\t; PUPDR'+pin+' = '+pup.toString(2).padStart(2,'0')+'b':''}
+${wr(0,'Write PUPDR')}
+
+; ── 4. Read IDR — Input Data Register ───────────────────
+${mwt('R0',base+DB.GO.IDR,'GPIO'+port+'->IDR')}
+${rd(0,'Read all GPIO'+port+' pin states from IDR')}
+${loadMask(1<<pin,'Bit mask for P'+port+pin)}
+\tAND\tR1, R1, R2\t\t\t\t; Isolate bit ${pin} = P${port}${pin} state
+; Result: R1 = 0x00000000 → P${port}${pin} LOW  (button pressed if pull-up)
+; Result: R1 = ${H(1<<pin)} → P${port}${pin} HIGH (button released if pull-up)`
+  );
+}
+
+function asmUSART(n,port,txPin,rxPin,af,baud){
+  const base=DB.USART[n];
+  const isApb2=(n===1||n===6);
+  const rccReg=isApb2?DB.RCC_APB2ENR:DB.RCC_APB1ENR;
+  const rccBit=isApb2?DB.APB2_USART[n]:DB.APB1_USART[n];
+  const gbase=DB.GPIO[port], ebit=DB.AHB1_GPIO[port];
+  /* BRR: fPCLK=16MHz (HSI default)  RM0368 §19.3.4
+     For integer baud: BRR = fPCLK/baud (over16 mode: OVER8=0)
+     Mantissa = floor(fPCLK/(16*baud)), Fraction = round((fPCLK/(16*baud)-Mantissa)*16) */
+  const usartDiv = 16000000/baud;
+  const mantissa = Math.floor(usartDiv/16);
+  const fraction = Math.round((usartDiv/16 - mantissa)*16) & 0xF;
+  const brrVal   = (mantissa<<4)|fraction;
+  /* TX AFR fields */
+  const txHi=txPin>=8, txAfrOff=txHi?DB.GO.AFRH:DB.GO.AFRL, txLpin=txHi?txPin-8:txPin;
+  const rxHi=rxPin>=8, rxAfrOff=rxHi?DB.GO.AFRH:DB.GO.AFRL, rxLpin=rxHi?rxPin-8:rxPin;
+  return (
+`; ─────────────────────────────────────────────────────────
+; AESARS — USART${n} @ ${baud} Baud, 8N1  |  RM0368 §19
+; USART${n} Base: ${H(base)}  |  fPCLK = 16 MHz (HSI)
+; BRR = ${brrVal} (Mantissa=${mantissa}, Fraction=${fraction})
+; P${port}${txPin} = TX (AF${af}),  P${port}${rxPin} = RX (AF${af})
+; ─────────────────────────────────────────────────────────
+
+; ── 1. Enable GPIO${port} Clock ──────────────────────────────────
+${mwt('R0',DB.RCC_AHB1ENR,'RCC AHB1ENR')}
+${rd(0,'Read AHB1ENR')}
+${loadMask(1<<ebit,'GPIO'+port+'EN bit '+ebit)}
+\tORR\tR1, R1, R2
+${wr(0,'GPIO'+port+' clock enabled')}
+
+; ── 2. Enable USART${n} Clock (${isApb2?'APB2':'APB1'}ENR Bit ${rccBit}) ───────────────
+${mwt('R0',rccReg,'RCC '+(isApb2?'APB2':'APB1')+'ENR')}
+${rd(0,'Read '+(isApb2?'APB2':'APB1')+'ENR')}
+${loadMask(1<<rccBit,'USART'+n+'EN bit '+rccBit)}
+\tORR\tR1, R1, R2
+${wr(0,'USART'+n+' clock enabled')}
+
+; ── 3. TX Pin P${port}${txPin} → Alternate Function AF${af}, Push-pull ────────
+${mwt('R0',gbase+DB.GO.MODER,'GPIO'+port+'->MODER')}
+${rd(0,'Read MODER')}
+${loadMask(0x03<<(txPin*2),'Clear MODER'+txPin)}
+\tBIC\tR1, R1, R2
+${loadMask(0x02<<(txPin*2),'Set AF mode (10b) for TX pin')}
+\tORR\tR1, R1, R2
+; Also set RX pin to AF mode in same register
+${loadMask(0x03<<(rxPin*2),'Clear MODER'+rxPin)}
+\tBIC\tR1, R1, R2
+${loadMask(0x02<<(rxPin*2),'Set AF mode (10b) for RX pin')}
+\tORR\tR1, R1, R2
+${wr(0,'Both TX and RX pins → AF mode')}
+
+; ── 4. Set AF${af} for TX (P${port}${txPin}) in ${txHi?'AFRH':'AFRL'} ─────────────────────────
+${mwt('R0',gbase+txAfrOff,'GPIO'+port+'->'+(txHi?'AFRH':'AFRL'))}
+${rd(0,'Read AFR register')}
+${loadMask(0xF<<(txLpin*4),'Clear AF field for pin '+txPin)}
+\tBIC\tR1, R1, R2
+${loadMask(af<<(txLpin*4),'AF'+af+' for USART'+n+'_TX')}
+\tORR\tR1, R1, R2
+${wr(0,'P'+port+txPin+' → AF'+af)}
+
+; ── 5. Set AF${af} for RX (P${port}${rxPin}) in ${rxHi?'AFRH':'AFRL'} ─────────────────────────
+${mwt('R0',gbase+rxAfrOff,'GPIO'+port+'->'+(rxHi?'AFRH':'AFRL'))}
+${rd(0,'Read AFR register')}
+${loadMask(0xF<<(rxLpin*4),'Clear AF field for pin '+rxPin)}
+\tBIC\tR1, R1, R2
+${loadMask(af<<(rxLpin*4),'AF'+af+' for USART'+n+'_RX')}
+\tORR\tR1, R1, R2
+${wr(0,'P'+port+rxPin+' → AF'+af)}
+
+; ── 6. USART${n} BRR  RM0368 §19.6.3 ─────────────────────────────
+; fPCLK=16000000 Hz, Baud=${baud}
+; DIV = 16000000 / ${baud} = ${(16000000/baud).toFixed(4)}
+; Mantissa = ${mantissa} (BRR[15:4]), Fraction = ${fraction} (BRR[3:0])
+${mwt('R0',base+DB.UO.BRR,'USART'+n+'->BRR')}
+${loadMask(brrVal,'BRR value for '+baud+' baud')}
+\tSTR\tR2, [R0]\t\t\t\t; Write BRR
+
+; ── 7. USART${n} CR1 — 8-bit data, no parity, TX+RX enable ────────
+; CR1: UE(13)=USART Enable, TE(3)=TX Enable, RE(2)=RX Enable
+; M(12)=0 → 8-bit, PCE(10)=0 → no parity
+${mwt('R0',base+DB.UO.CR1,'USART'+n+'->CR1')}
+\tMOV\tR1, #0x0000000C\t\t\t; TE|RE = TX+RX enabled, UE off
+${wr(0,'Write CR1 (TX+RX on)')}
+${rd(0,'Re-read CR1')}
+\tMOV\tR2, #0x00002000\t\t\t; UE bit 13 = USART Enable
+\tORR\tR1, R1, R2
+${wr(0,'USART'+n+' enabled — ready for comms')}`
+  );
+}
+
+function asmPWM(timN,ch,port,pin,af,freq){
+  const tbase=DB.TIM[timN];
+  const isApb2=(timN===1);
+  const rccReg=isApb2?DB.RCC_APB2ENR:DB.RCC_APB1ENR;
+  const rccBit=isApb2?DB.APB2_TIM[timN]:DB.APB1_TIM[timN];
+  const gbase=DB.GPIO[port], ebit=DB.AHB1_GPIO[port];
+  /* Timer clock = 16 MHz (APB1/APB2 not scaled at reset)
+     PSC=15 → fTimer = 16M/16 = 1 MHz, period = 1 µs
+     ARR = (1MHz / freq) - 1 */
+  const psc=15, arr=Math.round(1000000/freq)-1;
+  const ccr=Math.round(arr*0.5);
+  const afrOff=(pin>=8)?DB.GO.AFRH:DB.GO.AFRL, lpin=pin>=8?pin-8:pin;
+  /* CCMR and CCR offsets for channel */
+  const ccmrOff=(ch<=2)?DB.TO.CCMR1:DB.TO.CCMR2;
+  const ccrOff=[,DB.TO.CCR1,DB.TO.CCR2,DB.TO.CCR3,DB.TO.CCR4][ch];
+  /* PWM Mode 1 bits in CCMR: OCxM=110, OCxPE=1 → 0x68 at correct shift */
+  const ccmrShift=((ch-1)%2)*8;
+  const ccmrVal=0x68<<ccmrShift;
+  /* CCER CCxE bit */
+  const ccerBit=(ch-1)*4;
+  return (
+`; ─────────────────────────────────────────────────────────
+; AESARS — TIM${timN} CH${ch} PWM @ ${freq} Hz  |  RM0368 §14
+; TIM${timN} Base: ${H(tbase)}  |  fCLK = 16 MHz
+; PSC=${psc} → fTimer=1 MHz  |  ARR=${arr} → T=${(1/freq*1000).toFixed(3)} ms
+; CCR${ch}=${ccr} → 50% duty  |  P${port}${pin} AF${af}
+; ─────────────────────────────────────────────────────────
+
+; ── 1. Enable GPIO${port} Clock ──────────────────────────────────
+${mwt('R0',DB.RCC_AHB1ENR,'RCC AHB1ENR')}
+${rd(0,'Read AHB1ENR')}
+${loadMask(1<<ebit,'GPIO'+port+'EN bit '+ebit)}
+\tORR\tR1, R1, R2
+${wr(0,'GPIO'+port+' clock enabled')}
+
+; ── 2. Enable TIM${timN} Clock (${isApb2?'APB2':'APB1'}ENR Bit ${rccBit}) ───────────────
+${mwt('R0',rccReg,'RCC '+(isApb2?'APB2':'APB1')+'ENR')}
+${rd(0,'Read RCC register')}
+${loadMask(1<<rccBit,'TIM'+timN+'EN bit '+rccBit)}
+\tORR\tR1, R1, R2
+${wr(0,'TIM'+timN+' clock enabled')}
+
+; ── 3. P${port}${pin} → AF${af} (TIM${timN}_CH${ch}), Very-High speed ────────────
+${mwt('R0',gbase+DB.GO.MODER,'GPIO'+port+'->MODER')}
+${rd(0,'Read MODER')}
+${loadMask(0x03<<(pin*2),'Clear MODER'+pin)}
+\tBIC\tR1, R1, R2
+${loadMask(0x02<<(pin*2),'AF mode (10b)')}
+\tORR\tR1, R1, R2
+${wr(0,'P'+port+pin+' → Alternate Function mode')}
+
+${mwt('R0',gbase+DB.GO.OSPEEDR,'GPIO'+port+'->OSPEEDR')}
+${rd(0,'Read OSPEEDR')}
+${loadMask(0x03<<(pin*2),'Very-High speed mask (11b)')}
+\tORR\tR1, R1, R2\t\t\t\t; OSPEEDR${pin}=11 (100 MHz — needed for PWM)
+${wr(0,'Write OSPEEDR')}
+
+${mwt('R0',gbase+afrOff,'GPIO'+port+'->'+(pin>=8?'AFRH':'AFRL'))}
+${rd(0,'Read AFR')}
+${loadMask(0xF<<(lpin*4),'Clear AF field pin '+pin)}
+\tBIC\tR1, R1, R2
+${loadMask(af<<(lpin*4),'AF'+af+' = TIM'+timN+'_CH'+ch)}
+\tORR\tR1, R1, R2
+${wr(0,'P'+port+pin+' → AF'+af+' (TIM'+timN+'_CH'+ch+')')}
+
+; ── 4. TIM${timN}->PSC = ${psc}  →  fTimer = 1 MHz ─────────────────────
+${mwt('R0',tbase+DB.TO.PSC,'TIM'+timN+'->PSC')}
+\tMOV\tR1, #${psc}\t\t\t\t; PSC: fTimer=16MHz/(${psc}+1)=1MHz
+${wr(0,'Write PSC')}
+
+; ── 5. TIM${timN}->ARR = ${arr}  →  f = ${freq} Hz ────────────────────────
+${mwt('R0',tbase+DB.TO.ARR,'TIM'+timN+'->ARR')}
+${loadMask(arr,'ARR value for '+freq+' Hz')}
+\tSTR\tR2, [R0]\t\t\t\t; Write ARR
+
+; ── 6. TIM${timN}->CCR${ch} = ${ccr}  →  50% duty cycle ──────────────────────
+${mwt('R0',tbase+ccrOff,'TIM'+timN+'->CCR'+ch)}
+${loadMask(ccr,'CCR'+ch+' = 50% of ARR='+arr)}
+\tSTR\tR2, [R0]\t\t\t\t; Write CCR${ch}
+
+; ── 7. CCMR${ch<=2?1:2} — OCxM=110 (PWM Mode 1), OCxPE=1 ─────────────
+; PWM Mode 1: pin high while TIMx_CNT < TIMx_CCRx  RM0368 §14.3.9
+${mwt('R0',tbase+ccmrOff,'TIM'+timN+'->CCMR'+(ch<=2?1:2))}
+${rd(0,'Read CCMR')}
+${loadMask(0xFF<<ccmrShift,'Clear CH'+ch+' mode field')}
+\tBIC\tR1, R1, R2
+${loadMask(ccmrVal,'OCxM=110 (PWM1) | OCxPE=1')}
+\tORR\tR1, R1, R2
+${wr(0,'Write CCMR — PWM Mode 1 active')}
+
+; ── 8. CCER — Enable CH${ch} output (CC${ch}E = 1) ────────────────────
+${mwt('R0',tbase+DB.TO.CCER,'TIM'+timN+'->CCER')}
+${rd(0,'Read CCER')}
+${loadMask(1<<ccerBit,'CC'+ch+'E bit '+ccerBit)}
+\tORR\tR1, R1, R2\t\t\t\t; CH${ch} output enable
+${wr(0,'Write CCER')}
+${isApb2?`
+; ── 8b. BDTR — MOE (Main Output Enable) — TIM1 only ──────
+; TIM1 is an advanced-control timer; MOE must be set  RM0368 §15.4.18
+${mwt('R0',tbase+DB.TO.BDTR,'TIM1->BDTR')}
+${rd(0,'Read BDTR')}
+\tMOV\tR2, #0x00008000\t\t\t; MOE bit 15
+\tORR\tR1, R1, R2
+${wr(0,'TIM1 Main Output Enabled')}`:''}
+
+; ── ${isApb2?9:9}. CR1 — Start Timer: CEN=1, ARPE=1 ─────────────────────
+${mwt('R0',tbase+DB.TO.CR1,'TIM'+timN+'->CR1')}
+${rd(0,'Read CR1')}
+\tMOV\tR2, #0x00000081\t\t\t; CEN=bit0 (start) | ARPE=bit7 (preload)
+\tORR\tR1, R1, R2
+${wr(0,'TIM'+timN+' started — PWM running on P'+port+pin)}`
+  );
+}
+
+function asmI2C(n,sclPort,sclPin,sdaPort,sdaPin,fast){
+  const base=DB.I2C[n], rccBit=DB.APB1_I2C[n];
+  const afScl=4, afSda=4;
+  const freq=fast?400000:100000;
+  /* CCR: Standard mode: CCR=T_high/T_pclk= (1/(2*freq))/62.5ns = 80 (100kHz), 20 (400kHz)
+     fPCLK=16MHz  RM0368 §18.6.8 */
+  const ccr=fast?20:80;
+  const trise=fast?Math.ceil(300e-9/62.5e-9)+1:Math.ceil(1000e-9/62.5e-9)+1;
+  const gbase=DB.GPIO[sclPort], ebit=DB.AHB1_GPIO[sclPort];
+  const sclLpin=sclPin>=8?sclPin-8:sclPin, sdaLpin=sdaPin>=8?sdaPin-8:sdaPin;
+  return (
+`; ─────────────────────────────────────────────────────────
+; AESARS — I2C${n} @ ${fast?'400kHz (Fast Mode)':'100kHz (Standard Mode)'}  |  RM0368 §18
+; I2C${n} Base: ${H(base)}  |  fPCLK=16MHz
+; SCL = P${sclPort}${sclPin} (AF${afScl})  |  SDA = P${sdaPort}${sdaPin} (AF${afSda})
+; CCR=${ccr}  |  TRISE=${trise}
+; ─────────────────────────────────────────────────────────
+
+; ── 1. Enable GPIO${sclPort} Clock ──────────────────────────────────
+${mwt('R0',DB.RCC_AHB1ENR,'RCC AHB1ENR')}
+${rd(0,'Read AHB1ENR')}
+${loadMask(1<<ebit,'GPIO'+sclPort+'EN bit')}
+\tORR\tR1, R1, R2
+${wr(0,'GPIO'+sclPort+' clock on')}
+
+; ── 2. Enable I2C${n} Clock (APB1ENR Bit ${rccBit}) ─────────────────
+${mwt('R0',DB.RCC_APB1ENR,'RCC APB1ENR')}
+${rd(0,'Read APB1ENR')}
+${loadMask(1<<rccBit,'I2C'+n+'EN bit '+rccBit)}
+\tORR\tR1, R1, R2
+${wr(0,'I2C'+n+' clock on')}
+
+; ── 3. SCL P${sclPort}${sclPin} and SDA P${sdaPort}${sdaPin} → Open-drain AF${afScl} ──────────
+${mwt('R0',gbase+DB.GO.MODER,'GPIO'+sclPort+'->MODER')}
+${rd(0,'Read MODER')}
+${loadMask(0x03<<(sclPin*2),'Clear MODER for SCL')}
+\tBIC\tR1, R1, R2
+${loadMask(0x02<<(sclPin*2),'AF mode for SCL')}
+\tORR\tR1, R1, R2
+${loadMask(0x03<<(sdaPin*2),'Clear MODER for SDA')}
+\tBIC\tR1, R1, R2
+${loadMask(0x02<<(sdaPin*2),'AF mode for SDA')}
+\tORR\tR1, R1, R2
+${wr(0,'SCL+SDA → AF mode')}
+
+${mwt('R0',gbase+DB.GO.OTYPER,'GPIO'+sclPort+'->OTYPER')}
+${rd(0,'Read OTYPER')}
+${loadMask((1<<sclPin)|(1<<sdaPin),'Open-drain for SCL and SDA (I2C requirement)')}
+\tORR\tR1, R1, R2
+${wr(0,'SCL+SDA → Open-drain')}
+
+${mwt('R0',gbase+DB.GO.OSPEEDR,'GPIO'+sclPort+'->OSPEEDR')}
+${rd(0,'Read OSPEEDR')}
+${loadMask((0x03<<(sclPin*2))|(0x03<<(sdaPin*2)),'High speed for both pins')}
+\tORR\tR1, R1, R2
+${wr(0,'SCL+SDA → High speed')}
+
+${mwt('R0',gbase+(sclPin>=8?DB.GO.AFRH:DB.GO.AFRL),'GPIO'+sclPort+'->'+(sclPin>=8?'AFRH':'AFRL'))}
+${rd(0,'Read AFR')}
+${loadMask(0xF<<(sclLpin*4),'Clear SCL AF field')}
+\tBIC\tR1, R1, R2
+${loadMask(afScl<<(sclLpin*4),'AF4 for I2C'+n+'_SCL')}
+\tORR\tR1, R1, R2
+${loadMask(0xF<<(sdaLpin*4),'Clear SDA AF field')}
+\tBIC\tR1, R1, R2
+${loadMask(afSda<<(sdaLpin*4),'AF4 for I2C'+n+'_SDA')}
+\tORR\tR1, R1, R2
+${wr(0,'SCL+SDA → AF4 (I2C'+n+')')}
+
+; ── 4. I2C${n}->CR2  →  FREQ=16 (MHz) ─────────────────────────────
+${mwt('R0',base+DB.IO.CR2,'I2C'+n+'->CR2')}
+\tMOV\tR1, #0x00000010\t\t\t; FREQ[5:0]=16 (fPCLK=16MHz) RM0368 §18.6.3
+${wr(0,'Write CR2')}
+
+; ── 5. I2C${n}->CCR = ${ccr}  →  ${fast?'400kHz Fast':'100kHz Standard'} Mode ──────────────
+${mwt('R0',base+DB.IO.CCR,'I2C'+n+'->CCR')}
+\tMOV\tR1, #${ccr}\t\t\t\t; CCR=${ccr} for ${freq/1000}kHz  RM0368 §18.6.8
+${wr(0,'Write CCR')}
+
+; ── 6. I2C${n}->TRISE = ${trise} ─────────────────────────────────────────
+${mwt('R0',base+DB.IO.TRISE,'I2C'+n+'->TRISE')}
+\tMOV\tR1, #${trise}\t\t\t\t; TRISE=${trise}  RM0368 §18.6.9
+${wr(0,'Write TRISE')}
+
+; ── 7. I2C${n}->CR1  →  PE=1 (Peripheral Enable) ────────────────────
+${mwt('R0',base+DB.IO.CR1,'I2C'+n+'->CR1')}
+${rd(0,'Read CR1')}
+\tMOV\tR2, #0x00000001\t\t\t; PE bit 0 = I2C Enable
+\tORR\tR1, R1, R2
+${wr(0,'I2C'+n+' enabled')}`
+  );
+}
+
+/* ── Main generate() — pure datasheet engine, zero network calls ── */
+function generate(){
+  const task=document.getElementById('taskInput').value.trim();
+  if(!task){alert('Please enter a hardware task description.');return;}
+  const btn=document.getElementById('genBtn');
+  btn.disabled=true; btn.classList.add('ld');
+  setSt('busy','Applying RM0368 register mappings…');
+  document.getElementById('quickOut').innerHTML=`<div class="ph"><span style="color:var(--accent);font-size:1.4rem">⚙</span><span style="color:var(--accent)">Processing task…</span></div>`;
+
+  setTimeout(()=>{
+    try{
+      const p=parseTask(task);
+      let registers=[], asmBody='', taskSummary='';
+
+      /* ══ ROUTING ══ */
+      if(p.isUSART){
+        const n=p.usartN||2;
+        let port='A', txPin=(n===1?9:2), rxPin=(n===1?10:3), af=7;
+        if(p.pins.length>=2){port=p.pins[0].port;txPin=p.pins[0].pin;rxPin=p.pins[1].pin;}
+        else if(p.pins.length===1){port=p.pins[0].port;}
+        const usartDiv=16000000/p.baud;
+        const mantissa=Math.floor(usartDiv/16);
+        const fraction=Math.round((usartDiv/16-mantissa)*16)&0xF;
+        const brrVal=(mantissa<<4)|fraction;
+        const isApb2=(n===1||n===6);
+        const rccReg=isApb2?DB.RCC_APB2ENR:DB.RCC_APB1ENR;
+        const rccBit=isApb2?DB.APB2_USART[n]:DB.APB1_USART[n];
+        taskSummary=`USART${n} initialised at ${p.baud} baud, 8N1 — P${port}${txPin}(TX)/P${port}${rxPin}(RX) AF${af}, BRR=0x${brrVal.toString(16).toUpperCase()}`;
+        registers=[
+          regEnableGPIO(port),
+          regMODER(port,txPin,2), regAFR(port,txPin,af),
+          regMODER(port,rxPin,2), regAFR(port,rxPin,af),
+          {name:`RCC->${isApb2?'APB2':'APB1'}ENR`,address:H(rccReg),
+           bit_field:`USART${n}EN  Bit ${rccBit}`,value:H(1<<rccBit),
+           description:`Enable USART${n} clock — RM0368 §6.3.${isApb2?11:10}`},
+          {name:`USART${n}->BRR`,address:H(DB.USART[n]+DB.UO.BRR),
+           bit_field:`DIV_Mantissa[15:4]=${mantissa}  DIV_Fraction[3:0]=${fraction}`,
+           value:H(brrVal),
+           description:`Baud ${p.baud} @ fPCLK=16MHz — RM0368 §19.6.3`},
+          {name:`USART${n}->CR1`,address:H(DB.USART[n]+DB.UO.CR1),
+           bit_field:`UE(13)=1  TE(3)=1  RE(2)=1  M(12)=0  PCE(10)=0`,
+           value:H(0x200C),
+           description:`USART enable | TX+RX on | 8-bit data | No parity — RM0368 §19.6.4`},
+        ];
+        asmBody=asmUSART(n,port,txPin,rxPin,af,p.baud);
+
+      }else if(p.isPWM){
+        const n=p.timN||1, ch=p.timCh||1;
+        const defaults={1:{1:'A',1:8,af:1},2:{1:'A',2:0,af:1},3:{1:'A',3:6,af:2}};
+        let port='A',pin=8,af=1;
+        if(n===1){port='A';pin=8+(ch-1);af=1;}
+        else if(n===2){port='A';pin=ch-1;af=1;}
+        else if(n===3){port='A';pin=5+(ch>2?2:ch-1);af=2;}
+        if(p.main){port=p.main.port;pin=p.main.pin;}
+        const psc=15, arr=Math.round(1000000/p.pwmFreq)-1, ccr=Math.round(arr*0.5);
+        const isApb2=(n===1);
+        const rccReg=isApb2?DB.RCC_APB2ENR:DB.RCC_APB1ENR;
+        const rccBit=isApb2?DB.APB2_TIM[n]:DB.APB1_TIM[n];
+        const ccrOff=[,DB.TO.CCR1,DB.TO.CCR2,DB.TO.CCR3,DB.TO.CCR4][ch];
+        taskSummary=`TIM${n} CH${ch} PWM at ${p.pwmFreq} Hz on P${port}${pin} (AF${af}) — PSC=${psc}, ARR=${arr}, CCR${ch}=${ccr}`;
+        registers=[
+          regEnableGPIO(port),
+          regMODER(port,pin,2), regOSPEEDR(port,pin,3), regAFR(port,pin,af),
+          {name:`RCC->${isApb2?'APB2':'APB1'}ENR`,address:H(rccReg),
+           bit_field:`TIM${n}EN  Bit ${rccBit}`,value:H(1<<rccBit),
+           description:`Enable TIM${n} clock — RM0368 §6.3.${isApb2?11:10}`},
+          {name:`TIM${n}->PSC`,address:H(DB.TIM[n]+DB.TO.PSC),
+           bit_field:`PSC[15:0] = ${psc}`,value:H(psc),
+           description:`Prescaler: fTimer=16MHz/(${psc}+1)=1MHz — RM0368 §14.4.11`},
+          {name:`TIM${n}->ARR`,address:H(DB.TIM[n]+DB.TO.ARR),
+           bit_field:`ARR[31:0] = ${arr}`,value:H(arr),
+           description:`Auto-reload: period=${(1/p.pwmFreq*1000).toFixed(3)}ms → f=${p.pwmFreq}Hz — RM0368 §14.4.12`},
+          {name:`TIM${n}->CCR${ch}`,address:H(DB.TIM[n]+ccrOff),
+           bit_field:`CCR${ch}[31:0] = ${ccr}`,value:H(ccr),
+           description:`Compare: 50% duty (${ccr}/${arr}) — RM0368 §14.4.13`},
+          {name:`TIM${n}->CCMR${ch<=2?1:2}`,address:H(DB.TIM[n]+(ch<=2?DB.TO.CCMR1:DB.TO.CCMR2)),
+           bit_field:`OC${ch}M[6:4]=110  OC${ch}PE=1  (shift ${((ch-1)%2)*8})`,
+           value:H(0x68<<(((ch-1)%2)*8)),
+           description:`PWM Mode 1: high while CNT<CCR${ch}, preload enabled — RM0368 §14.4.7`},
+          {name:`TIM${n}->CCER`,address:H(DB.TIM[n]+DB.TO.CCER),
+           bit_field:`CC${ch}E  Bit ${(ch-1)*4}`,value:H(1<<((ch-1)*4)),
+           description:`Enable CH${ch} output — RM0368 §14.4.9`},
+          ...(isApb2?[{name:`TIM1->BDTR`,address:H(DB.TIM[1]+DB.TO.BDTR),
+           bit_field:`MOE  Bit 15`,value:H(0x8000),
+           description:`Main Output Enable (TIM1 advanced-control timer only) — RM0368 §15.4.18`}]:[]),
+          {name:`TIM${n}->CR1`,address:H(DB.TIM[n]+DB.TO.CR1),
+           bit_field:`ARPE(7)=1  CEN(0)=1`,value:H(0x81),
+           description:`Start timer with ARR preload — RM0368 §14.4.1`},
+        ];
+        asmBody=asmPWM(n,ch,port,pin,af,p.pwmFreq);
+
+      }else if(p.isI2C){
+        const n=p.i2cN||1;
+        const sclPort='B', sclPin=(n===1?6:10), sdaPort='B', sdaPin=(n===1?7:11);
+        const af=4;
+        const freq=p.i2cFast?400000:100000;
+        const ccr=p.i2cFast?20:80;
+        const trise=p.i2cFast?6:17;
+        const rccBit=DB.APB1_I2C[n];
+        taskSummary=`I2C${n} at ${freq/1000}kHz — SCL=P${sclPort}${sclPin}, SDA=P${sdaPort}${sdaPin}, AF${af}`;
+        registers=[
+          regEnableGPIO(sclPort),
+          regMODER(sclPort,sclPin,2), regOTYPER(sclPort,sclPin,1), regOSPEEDR(sclPort,sclPin,2), regAFR(sclPort,sclPin,af),
+          regMODER(sdaPort,sdaPin,2), regOTYPER(sdaPort,sdaPin,1), regOSPEEDR(sdaPort,sdaPin,2), regAFR(sdaPort,sdaPin,af),
+          {name:`RCC->APB1ENR`,address:H(DB.RCC_APB1ENR),
+           bit_field:`I2C${n}EN  Bit ${rccBit}`,value:H(1<<rccBit),
+           description:`Enable I2C${n} peripheral clock — RM0368 §6.3.10`},
+          {name:`I2C${n}->CR2`,address:H(DB.I2C[n]+DB.IO.CR2),
+           bit_field:`FREQ[5:0] = 16`,value:H(16),
+           description:`Input clock frequency = 16 MHz — RM0368 §18.6.3`},
+          {name:`I2C${n}->CCR`,address:H(DB.I2C[n]+DB.IO.CCR),
+           bit_field:`CCR[11:0] = ${ccr}`,value:H(ccr),
+           description:`${p.i2cFast?'Fast':'Standard'}-mode clock control — RM0368 §18.6.8`},
+          {name:`I2C${n}->TRISE`,address:H(DB.I2C[n]+DB.IO.TRISE),
+           bit_field:`TRISE[5:0] = ${trise}`,value:H(trise),
+           description:`Max rise time — RM0368 §18.6.9`},
+          {name:`I2C${n}->CR1`,address:H(DB.I2C[n]+DB.IO.CR1),
+           bit_field:`PE(0) = 1`,value:H(1),
+           description:`Peripheral enable — RM0368 §18.6.1`},
+        ];
+        asmBody=asmI2C(n,sclPort,sclPin,sdaPort,sdaPin,p.i2cFast);
+
+      }else if(p.isIn){
+        const port=p.main.port||'A', pin=p.main.pin??0;
+        const pup=p.pullUp?1:p.pullDown?2:0;
+        taskSummary=`P${port}${pin} configured as digital input — ${['floating','pull-up','pull-down'][pup]}, reads button state from IDR`;
+        registers=[regEnableGPIO(port), regMODER(port,pin,0), regPUPDR(port,pin,pup)];
+        asmBody=asmGPIOIn(port,pin,pup);
+
+      }else{
+        /* Default: GPIO Output */
+        const port=p.main?.port||'A', pin=p.main?.pin??5;
+        const otyp=p.openDrain?1:0, pup=p.pullUp?1:p.pullDown?2:0, spd=p.ospeedr||2;
+        taskSummary=`P${port}${pin} configured as ${p.openDrain?'open-drain':'push-pull'} output — ${['low','medium','high','very-high'][spd]} speed, ${['no pull','pull-up','pull-down'][pup]}`;
+        registers=[
+          regEnableGPIO(port), regMODER(port,pin,1),
+          regOTYPER(port,pin,otyp), regOSPEEDR(port,pin,spd), regPUPDR(port,pin,pup)
+        ];
+        asmBody=asmGPIOOut(port,pin,otyp,spd,pup);
+      }
+
+      /* ── Build complete ARMCLANG assembly file ── */
+      const fullAsm=
+`; ═══════════════════════════════════════════════════════════════════
+;  AESARS — Auto-Generated ARMCLANG Assembly
+;  Device   : STM32F401RCT6 (ARM Cortex-M4F, Thumb-2 ISA)
+;  Toolchain: Keil MDK v5+ — armasm Unified Syntax (ARMCLANG)
+;  Sources  : RM0368 Rev 5   — STM32F401 Reference Manual
+;             ARM DDI 0439B  — Cortex-M4 Technical Reference Manual
+;             ARM DDI 0403E  — ARMv7-M Architecture Reference Manual
+;             ARM IHI0042F   — Procedure Call Standard (AAPCS)
+;             Keil MDK armasm 5 User Guide
+;  Task     : ${task}
+; ═══════════════════════════════════════════════════════════════════
+
+\tPRESERVE8\t\t\t\t\t; 8-byte stack alignment (AAPCS §5.2.1.2 / ARM IHI0042F)
+\tTHUMB\t\t\t\t\t\t; ARMv7-M: Thumb-2 ISA only (Cortex-M4 has no A32)
+
+\tAREA\tAESARS_CODE, CODE, READONLY\t; Read-only code section (armasm UG §7.2)
+\tEXPORT\tmain\t\t\t\t\t; Entry point — Keil MDK startup calls main
+
+; ─────────────────────────────────────────────────────────────────
+;  main — peripheral configuration entry point
+;  AAPCS register roles (ARM IHI0042F §5.1.1):
+;    R0-R3 = argument / scratch (caller-saved, used freely here)
+;    R4    = callee-saved (preserved by PUSH/POP)
+;    LR    = return address (saved by PUSH {R4,LR})
+; ─────────────────────────────────────────────────────────────────
+main\tPROC
+\tPUSH\t{R4, LR}\t\t\t\t; AAPCS prologue: save callee-saved R4 + return addr
+
+${asmBody}
+
+\tDSB\t\t\t\t\t\t; Data Sync Barrier: ensure all peripheral writes complete
+\t\t\t\t\t\t\t; Required by Cortex-M4 TRM §3.4 after peripheral access
+\tPOP\t{R4, PC}\t\t\t\t; AAPCS epilogue: restore R4, return (PC←LR)
+\tENDP
+
+\tALIGN\t4\t\t\t\t\t; Align to 4-byte boundary for literal pool (armasm UG §7.4)
+\tEND\t\t\t\t\t\t; End of source file`;
+
+      /* ── Populate UI ── */
+      document.getElementById('quickOut').innerHTML=
+        `<span style="color:var(--accent);font-family:'JetBrains Mono',monospace;font-size:.75rem;display:block;margin-bottom:8px">✅ ${taskSummary}</span>`+
+        `<span style="color:var(--text2)">▸ ${registers.length} register(s) configured\n▸ ARMCLANG ARM assembly generated\n▸ Based on RM0368, ARM DDI 0439, ARMv7-M ARM, AAPCS\n\n→ Open tabs below for full output</span>`;
+
+      let th=`<div style="overflow-x:auto"><table class="rtbl"><thead><tr><th>Register</th><th>Address</th><th>Bit Field</th><th>Value</th><th>Description</th></tr></thead><tbody>`;
+      registers.forEach(r=>{
+        th+=`<tr><td><span class="rn">${r.name}</span></td><td><span class="ra">${r.address}</span></td><td style="color:var(--text2);font-size:.79rem">${r.bit_field}</td><td><span class="rv">${r.value}</span></td><td class="rd">${r.description}</td></tr>`;
+      });
+      th+=`</tbody></table></div>`;
+      document.getElementById('regTbl').innerHTML=th;
+      document.getElementById('asmPre').innerHTML=hl(fullAsm);
+      document.getElementById('sumBox').innerHTML=
+        `<p style="margin-bottom:16px"><strong style="color:var(--accent)">Task:</strong> ${taskSummary}</p>`+
+        `<p style="margin-bottom:10px;color:var(--text)"><strong>Registers (${registers.length}):</strong></p>`+
+        `<ul style="padding-left:18px;color:var(--text2);line-height:2.3;font-size:.84rem">`+
+        registers.map(r=>`<li><code style="color:var(--accent);font-family:'JetBrains Mono',monospace;font-size:.76rem">${r.name}</code> <span style="color:var(--text3)">@ ${r.address}</span> — ${r.description}</li>`).join('')+`</ul>`;
+      document.getElementById('rpWrap').classList.add('on');
+      setSt('ok',`✓ ${registers.length} registers · ARMCLANG assembly · RM0368 compliant`);
+
+    }catch(e){
+      document.getElementById('quickOut').innerHTML=`<div class="ph"><span style="color:#ff5f56;font-size:1.3rem">⚠</span><span style="color:#ff5f56">Configuration Error</span><span style="font-size:.72rem;color:var(--text2)">${e.message}</span></div>`;
+      setSt('err','Parse error — check task description');
+      console.error(e);
+    }finally{
+      document.getElementById('genBtn').disabled=false;
+      document.getElementById('genBtn').classList.remove('ld');
+    }
+  },60);
+}
+
+/* ══ CONVERTER ══ */
+function convFrom(src){
+  const hE=document.getElementById('hexIn'),dE=document.getElementById('decIn'),bE=document.getElementById('binIn'),oE=document.getElementById('octIn');
+  let v=null;
+  try{
+    if(src==='hex'){const r=hE.value.trim().replace(/^0x/i,'');if(r)v=parseInt(r,16)}
+    else if(src==='dec'){const r=dE.value.trim();if(r)v=parseInt(r,10)}
+    else if(src==='bin'){const r=bE.value.trim().replace(/^0b/i,'');if(r)v=parseInt(r,2)}
+    else if(src==='oct'){const r=oE.value.trim().replace(/^0o/i,'');if(r)v=parseInt(r,8)}
+  }catch(e){}
+  if(v===null||isNaN(v)){document.getElementById('bitview').style.display='none';document.getElementById('cnote').textContent='';return}
+  const u=v>>>0;
+  if(src!=='hex')hE.value='0x'+u.toString(16).toUpperCase().padStart(8,'0');
+  if(src!=='dec')dE.value=u.toString(10);
+  if(src!=='bin')bE.value='0b'+u.toString(2).padStart(32,'0');
+  if(src!=='oct')oE.value='0o'+u.toString(8);
+  document.getElementById('cnote').textContent=`Signed: ${v|0}  |  Unsigned: ${u}  |  0x${u.toString(16).toUpperCase().padStart(8,'0')}`;
+  const bits=u.toString(2).padStart(32,'0');
+  const br=document.getElementById('brow'),ir=document.getElementById('brow2');
+  br.innerHTML='';ir.innerHTML='';
+  for(let i=31;i>=0;i--){
+    if(i===23||i===15||i===7){
+      [br,ir].forEach(r=>{const s=document.createElement('div');s.className='bsep';r.appendChild(s)});
+    }
+    const c=document.createElement('div');c.className='bcell'+(bits[31-i]==='1'?' one':'');c.textContent=bits[31-i];br.appendChild(c);
+    const ix=document.createElement('div');ix.className='bcell ix';ix.textContent=i;ir.appendChild(ix);
+  }
+  document.getElementById('bitview').style.display='block';
+}
+function convClear(){
+  ['hexIn','decIn','binIn','octIn'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('bitview').style.display='none';
+  document.getElementById('cnote').textContent='';
+}
+
+/* Ctrl+Enter shortcut */
+document.getElementById('taskInput').addEventListener('keydown',e=>{if(e.ctrlKey&&e.key==='Enter')generate()});
+</script>
+</body>
+</html>
